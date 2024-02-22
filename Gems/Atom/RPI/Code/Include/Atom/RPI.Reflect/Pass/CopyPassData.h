@@ -51,6 +51,10 @@ namespace AZ
             RHI::ImageSubresource m_imageDestinationSubresource;
             RHI::Origin m_imageDestinationOrigin;
 
+            // Device indices
+            int32_t m_sourceDeviceIndex = -1;
+            int32_t m_destinationDeviceIndex = -1; //@TODO maybe a mask so we can broadcast?
+
             // If set to true, pass will automatically create a transient output attachment based on input
             // If false, the output target of the copy will need to be specified
             bool m_cloneInput = true;
