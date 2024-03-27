@@ -100,6 +100,7 @@ namespace AZ
             AZ_Assert(
                 sameDevice || (m_data.m_sourceDeviceIndex != -1 && m_data.m_destinationDeviceIndex != -1),
                 "CopyPass: Either source and destination device indices must be invalid, or both must be valid");
+            // sameDevice = false;
 
             m_copyMode = sameDevice ? CopyMode::SameDevice : CopyMode::DifferentDevicesIntermediateHost;
 
@@ -115,28 +116,29 @@ namespace AZ
 
             else if (m_copyMode == CopyMode::DifferentDevicesIntermediateHost)
             {
-                auto* device1 = RHI::RHISystemInterface::Get()->GetDevice(RHI::MultiDevice::DefaultDeviceIndex);
+                auto* device1 = RHI::RHISystemInterface::Get()->GetDevice(m_data.m_sourceDeviceIndex >= 0 ? m_data.m_sourceDeviceIndex : 0);
                 AZ_Assert(
                     device1->GetFeatures().m_signalFenceFromCPU,
                     "CopyPass: Device to device copy is only possible if all devices support signalling fences from the CPU");
-                auto* device2 = RHI::RHISystemInterface::Get()->GetDevice(RHI::MultiDevice::DefaultDeviceIndex);
+                auto* device2 =
+                    RHI::RHISystemInterface::Get()->GetDevice(m_data.m_destinationDeviceIndex >= 0 ? m_data.m_destinationDeviceIndex : 0);
                 AZ_Assert(
                     device2->GetFeatures().m_signalFenceFromCPU,
                     "CopyPass: Device to device copy is only possible if all devices support signalling fences from the CPU");
 
                 for (auto& fence : m_device1SignalFence)
                 {
-                    fence = RHI::Factory::Get().CreateFence();
+                    fence = new RHI::MultiDeviceFence();
                     AZ_Assert(fence != nullptr, "CopyPass failed to create a fence");
-                    [[maybe_unused]] RHI::ResultCode result = fence->Init(*device1, RHI::FenceState::Signaled);
+                    [[maybe_unused]] RHI::ResultCode result = fence->Init(RHI::MultiDevice::AllDevices, RHI::FenceState::Signaled);
                     AZ_Assert(result == RHI::ResultCode::Success, "CopyPass failed to init fence");
                 }
 
                 for (auto& fence : m_device2WaitFence)
                 {
-                    fence = RHI::Factory::Get().CreateFence();
+                    fence = new RHI::MultiDeviceFence();
                     AZ_Assert(fence != nullptr, "CopyPass failed to create a fence");
-                    [[maybe_unused]] auto result = fence->Init(*device2, RHI::FenceState::Signaled);
+                    [[maybe_unused]] auto result = fence->Init(RHI::MultiDevice::AllDevices, RHI::FenceState::Signaled);
                     AZ_Assert(result == RHI::ResultCode::Success, "CopyPass failed to init fence");
                 }
 
@@ -204,11 +206,11 @@ namespace AZ
             {
                 for (auto& fence : m_device1SignalFence)
                 {
-                    fence->WaitOnCpu();
+                    fence->GetDeviceFence(m_data.m_sourceDeviceIndex >= 0 ? m_data.m_sourceDeviceIndex : 0)->WaitOnCpu();
                 }
                 for (auto& fence : m_device2WaitFence)
                 {
-                    fence->WaitOnCpu();
+                    fence->GetDeviceFence(m_data.m_destinationDeviceIndex >= 0 ? m_data.m_destinationDeviceIndex : 0)->WaitOnCpu();
                 }
             }
         }
@@ -290,7 +292,7 @@ namespace AZ
         {
             if (m_copyItemSameDevice.m_type != RHI::CopyItemType::Invalid)
             {
-                context.GetCommandList()->Submit(m_copyItemSameDevice.GetDeviceCopyItem(RHI::MultiDevice::DefaultDeviceIndex));
+                context.GetCommandList()->Submit(m_copyItemSameDevice.GetDeviceCopyItem(m_data.m_sourceDeviceIndex));
             }
         }
 
@@ -337,20 +339,22 @@ namespace AZ
 
             frameGraph.SignalFence(*m_device1SignalFence[m_currentBufferIndex]);
 
-            m_device1SignalFence[m_currentBufferIndex]->WaitOnCpuAsync(
-                [this, bufferIndex = m_currentBufferIndex]()
-                {
-                    auto bufferSize = m_device2HostBuffer[bufferIndex]->GetBufferSize();
-                    void* data1 = m_device1HostBuffer[bufferIndex]->Map(bufferSize, 0)[RHI::MultiDevice::DefaultDeviceIndex];
-                    void* data2 = m_device2HostBuffer[bufferIndex]->Map(bufferSize, 0)[RHI::MultiDevice::DefaultDeviceIndex];
-                    memcpy(data2, data1, bufferSize);
-                    m_device1HostBuffer[bufferIndex]->Unmap();
-                    m_device2HostBuffer[bufferIndex]->Unmap();
+            m_device1SignalFence[m_currentBufferIndex]
+                ->GetDeviceFence(m_data.m_sourceDeviceIndex == -1 && m_data.m_destinationDeviceIndex == -1)
+                ->WaitOnCpuAsync(
+                    [this, bufferIndex = m_currentBufferIndex]()
+                    {
+                        auto bufferSize = m_device2HostBuffer[bufferIndex]->GetBufferSize();
+                        void* data1 = m_device1HostBuffer[bufferIndex]->Map(bufferSize, 0)[m_data.m_sourceDeviceIndex];
+                        void* data2 = m_device2HostBuffer[bufferIndex]->Map(bufferSize, 0)[m_data.m_destinationDeviceIndex];
+                        memcpy(data2, data1, bufferSize);
+                        m_device1HostBuffer[bufferIndex]->Unmap();
+                        m_device2HostBuffer[bufferIndex]->Unmap();
 
-                    // m_device1HostBuffer[bufferIndex].reset();
+                        // m_device1HostBuffer[bufferIndex].reset();
 
-                    m_device2WaitFence[bufferIndex]->SignalOnCpu();
-                });
+                        m_device2WaitFence[bufferIndex]->SignalOnCpu();
+                    });
         }
 
         void CopyPass::CompileResourcesDeviceToHost(const RHI::FrameGraphCompileContext& context)
@@ -385,7 +389,7 @@ namespace AZ
                     AZStd::vector<RHI::SingleDeviceImageSubresourceLayout> sourceImageSubResourcesLayouts;
                     sourceImageSubResourcesLayouts.resize_no_construct(sourceImageDescriptor.m_mipLevels);
                     size_t sourceTotalSizeInBytes = 0;
-                    sourceImage->GetDeviceImage(RHI::MultiDevice::DefaultDeviceIndex)
+                    sourceImage->GetDeviceImage(m_data.m_sourceDeviceIndex)
                         ->GetSubresourceLayouts(sourceRange, sourceImageSubResourcesLayouts.data(), &sourceTotalSizeInBytes);
                     AZ::u64 sourceByteCount = sourceTotalSizeInBytes;
 
@@ -395,6 +399,7 @@ namespace AZ
                     desc.m_byteCount = sourceByteCount;
                     m_device1HostBuffer[m_currentBufferIndex] = BufferSystemInterface::Get()->CreateBufferFromCommonPool(desc);
                     desc.m_bufferName = AZStd::string(GetPathName().GetStringView()) + "_hostbuffer2";
+                    desc.m_poolType = RPI::CommonBufferPoolType::Staging;
                     m_device2HostBuffer[m_currentBufferIndex] = BufferSystemInterface::Get()->CreateBufferFromCommonPool(desc);
 
                     // copy descriptor for copying image to buffer
@@ -479,7 +484,7 @@ namespace AZ
         {
             if (m_copyItemDeviceToHost.m_type != RHI::CopyItemType::Invalid)
             {
-                context.GetCommandList()->Submit(m_copyItemDeviceToHost.GetDeviceCopyItem(RHI::MultiDevice::DefaultDeviceIndex));
+                context.GetCommandList()->Submit(m_copyItemDeviceToHost.GetDeviceCopyItem(m_data.m_sourceDeviceIndex));
             }
         }
 
@@ -591,7 +596,7 @@ namespace AZ
         {
             if (m_copyItemHostToDevice.m_type != RHI::CopyItemType::Invalid)
             {
-                context.GetCommandList()->Submit(m_copyItemHostToDevice.GetDeviceCopyItem(RHI::MultiDevice::DefaultDeviceIndex));
+                context.GetCommandList()->Submit(m_copyItemHostToDevice.GetDeviceCopyItem(m_data.m_destinationDeviceIndex));
             }
         }
 
@@ -599,7 +604,6 @@ namespace AZ
 
         void CopyPass::CopyBuffer(const RHI::FrameGraphCompileContext& context)
         {
-            RHI::MultiDeviceCopyBufferDescriptor copyDesc;
             RHI::MultiDeviceCopyBufferDescriptor copyDesc;
 
             // Source Buffer

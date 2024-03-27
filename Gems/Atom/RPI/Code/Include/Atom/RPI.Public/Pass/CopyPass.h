@@ -85,8 +85,8 @@ namespace AZ
             int m_currentBufferIndex = 0;
             AZStd::array<Data::Instance<Buffer>, MaxFrames> m_device1HostBuffer;
             AZStd::array<Data::Instance<Buffer>, MaxFrames> m_device2HostBuffer;
-            AZStd::array<Ptr<RHI::SingleDeviceFence>, MaxFrames> m_device1SignalFence;
-            AZStd::array<Ptr<RHI::SingleDeviceFence>, MaxFrames> m_device2WaitFence;
+            AZStd::array<Ptr<RHI::MultiDeviceFence>, MaxFrames> m_device1SignalFence;
+            AZStd::array<Ptr<RHI::MultiDeviceFence>, MaxFrames> m_device2WaitFence;
             RHI::SingleDeviceImageSubresourceLayout m_inputImageLayout;
         };
     } // namespace RPI
