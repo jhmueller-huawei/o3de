@@ -104,13 +104,14 @@ namespace AZ::RHI
             PrepareFunction prepareFunction,
             CompileFunction compileFunction,
             ExecuteFunction executeFunction,
-            HardwareQueueClass hardwareQueueClass = HardwareQueueClass::Graphics)
-            : ScopeProducer(scopeId)
+            HardwareQueueClass hardwareQueueClass = HardwareQueueClass::Graphics,
+            int deviceIndex = RHI::MultiDevice::InvalidDeviceIndex)
+            : ScopeProducer(scopeId, deviceIndex)
             , m_prepareFunction{ AZStd::move(prepareFunction) }
             , m_compileFunction{ AZStd::move(compileFunction) }
             , m_executeFunction{ AZStd::move(executeFunction) }
         {
-            InitScope(scopeId, hardwareQueueClass);
+            InitScope(scopeId, hardwareQueueClass, deviceIndex);
         }
 
     private:

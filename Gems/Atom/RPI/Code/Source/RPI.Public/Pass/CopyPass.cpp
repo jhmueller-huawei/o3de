@@ -147,14 +147,16 @@ namespace AZ
                     AZStd::bind(&CopyPass::SetupFrameGraphDependenciesDeviceToHost, this, AZStd::placeholders::_1),
                     AZStd::bind(&CopyPass::CompileResourcesDeviceToHost, this, AZStd::placeholders::_1),
                     AZStd::bind(&CopyPass::BuildCommandListInternalDeviceToHost, this, AZStd::placeholders::_1),
-                    m_hardwareQueueClass);
+                    m_hardwareQueueClass,
+                    m_data.m_sourceDeviceIndex);
 
                 m_copyScopeProducerHostToDevice = AZStd::make_shared<RHI::ScopeProducerFunctionNoData>(
                     RHI::ScopeId{ AZStd::string(GetPathName().GetStringView()) + "_2" },
                     AZStd::bind(&CopyPass::SetupFrameGraphDependenciesHostToDevice, this, AZStd::placeholders::_1),
                     AZStd::bind(&CopyPass::CompileResourcesHostToDevice, this, AZStd::placeholders::_1),
                     AZStd::bind(&CopyPass::BuildCommandListInternalHostToDevice, this, AZStd::placeholders::_1),
-                    m_hardwareQueueClass);
+                    m_hardwareQueueClass,
+                    m_data.m_destinationDeviceIndex);
             }
             //@TODO timestamp queries
 
@@ -292,7 +294,7 @@ namespace AZ
         {
             if (m_copyItemSameDevice.m_type != RHI::CopyItemType::Invalid)
             {
-                context.GetCommandList()->Submit(m_copyItemSameDevice.GetDeviceCopyItem(m_data.m_sourceDeviceIndex));
+                context.GetCommandList()->Submit(m_copyItemSameDevice.GetDeviceCopyItem(context.GetDeviceIndex()));
             }
         }
 
@@ -340,7 +342,7 @@ namespace AZ
             frameGraph.SignalFence(*m_device1SignalFence[m_currentBufferIndex]);
 
             m_device1SignalFence[m_currentBufferIndex]
-                ->GetDeviceFence(m_data.m_sourceDeviceIndex == -1 && m_data.m_destinationDeviceIndex == -1)
+                ->GetDeviceFence(m_data.m_sourceDeviceIndex)
                 ->WaitOnCpuAsync(
                     [this, bufferIndex = m_currentBufferIndex]()
                     {
@@ -484,7 +486,7 @@ namespace AZ
         {
             if (m_copyItemDeviceToHost.m_type != RHI::CopyItemType::Invalid)
             {
-                context.GetCommandList()->Submit(m_copyItemDeviceToHost.GetDeviceCopyItem(m_data.m_sourceDeviceIndex));
+                context.GetCommandList()->Submit(m_copyItemDeviceToHost.GetDeviceCopyItem(context.GetDeviceIndex()));
             }
         }
 
@@ -596,7 +598,7 @@ namespace AZ
         {
             if (m_copyItemHostToDevice.m_type != RHI::CopyItemType::Invalid)
             {
-                context.GetCommandList()->Submit(m_copyItemHostToDevice.GetDeviceCopyItem(m_data.m_destinationDeviceIndex));
+                context.GetCommandList()->Submit(m_copyItemHostToDevice.GetDeviceCopyItem(context.GetDeviceIndex()));
             }
         }
 
