@@ -79,6 +79,9 @@ namespace AZ::RHI
 
             /// The job policy used for this group.
             JobPolicy m_jobPolicy = JobPolicy::Serial;
+
+            /// FenceTracker for telling the framegraph a Fence has been signalled
+            AZStd::shared_ptr<FenceTracker> m_fenceTracker;
         };
 
         void Init(const InitRequest& request);
@@ -106,6 +109,9 @@ namespace AZ::RHI
 
             /// The number of scopes in the ScopeEntry array.
             uint32_t m_scopeCount = 0;
+
+            /// FenceTracker for telling the framegraph a Fence has been signalled
+            AZStd::shared_ptr<FenceTracker> m_fenceTracker;
         };
 
         void Init(const InitMergedRequest& request);

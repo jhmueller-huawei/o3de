@@ -22,6 +22,7 @@ namespace AZ::RHI
         descriptor.m_commandList = request.m_commandList;
         descriptor.m_commandListCount = 1;
         descriptor.m_commandListIndex = 0;
+        descriptor.m_fenceTracker = request.m_fenceTracker;
 
         for (uint32_t i = 0; i < request.m_scopeCount; ++i)
         {
@@ -41,6 +42,7 @@ namespace AZ::RHI
         descriptor.m_scopeId = request.m_scopeId;
         descriptor.m_deviceIndex = request.m_deviceIndex;
         descriptor.m_commandListCount = request.m_commandListCount;
+        descriptor.m_fenceTracker = request.m_fenceTracker;
 
         // build the execute contexts
         // Note: each context includes a submission range, with the number of items in range equal to (submitCount / commandListCount)

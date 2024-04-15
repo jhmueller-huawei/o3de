@@ -6,22 +6,23 @@
  *
  */
 #include <Atom/RHI/FrameGraph.h>
+#include <AzCore/std/parallel/binary_semaphore.h>
 #include <AzCore/std/parallel/thread.h>
-#include <RHI/FrameGraphExecuteGroupSecondaryHandler.h>
+#include <RHI/CommandQueueContext.h>
+#include <RHI/Device.h>
+#include <RHI/FrameGraphExecuteGroupPrimary.h>
 #include <RHI/FrameGraphExecuteGroupPrimaryHandler.h>
 #include <RHI/FrameGraphExecuteGroupSecondary.h>
-#include <RHI/FrameGraphExecuteGroupPrimary.h>
+#include <RHI/FrameGraphExecuteGroupSecondaryHandler.h>
 #include <RHI/FrameGraphExecuter.h>
-#include <RHI/Device.h>
-#include <RHI/SwapChain.h>
 #include <RHI/Scope.h>
-#include <RHI/CommandQueueContext.h>
-
+#include <RHI/SwapChain.h>
 
 namespace AZ
 {
     namespace Vulkan
     {
+
         RHI::Ptr<FrameGraphExecuter> FrameGraphExecuter::Create()
         {
             return aznew FrameGraphExecuter();
@@ -62,6 +63,24 @@ namespace AZ
             const Scope* scopeNext = nullptr;
             const AZStd::vector<RHI::Scope*>& scopes = frameGraph.GetScopes();
 
+            // The following semaphore trackers are there to count how many semaphores are present before each swapchain
+            // Swapchains need to use a binary semaphore, which needs all dependent semaphores to be signalled before submitted to the queue
+            // We do this by counting the number of semaphores that the scopes are waiting for
+            // Not needed when AZ_FORCE_CPU_GPU_INSYNC because of synchronization after every scope
+            AZStd::intrusive_ptr<SemaphoreTrackerCollection> semaphoreTrackers;
+            // Tracker that will be used for the next swapchain in the framegraph
+            AZStd::shared_ptr<SemaphoreTrackerHandle> currentSemaphoreHandle;
+            // Some semaphores (Fences) might be waited-for by the use in a scope
+            // We remember which semaphores are signalled and assume that the ones that are never waited-for are waited-for by the user
+            AZStd::unordered_map<Fence*, bool> userFencesSignalledMap;
+            [[maybe_unused]] int numUnwaitedFences = 0;
+            bool useSemaphoreTrackers = frameGraph.GetScopes().front()->GetDevice().GetFeatures().m_signalFenceFromCPU;
+            if (useSemaphoreTrackers)
+            {
+                semaphoreTrackers = new SemaphoreTrackerCollection;
+                currentSemaphoreHandle = semaphoreTrackers->CreateHandle();
+            }
+
 #if defined(AZ_FORCE_CPU_GPU_INSYNC)
             // Forces all scopes to issue a dedicated merged scope group with one command list.
             // This will ensure that the Execute is done on only one scope and if an error happens
@@ -77,14 +96,14 @@ namespace AZ
                 if (subpassGroup)
                 {
                     FrameGraphExecuteGroupSecondary* scopeContextGroup = AddGroup<FrameGraphExecuteGroupSecondary>();
-                    scopeContextGroup->Init(static_cast<Device&>(scope.GetDevice()), scope, 1, GetJobPolicy());
+                    scopeContextGroup->Init(static_cast<Device&>(scope.GetDevice()), scope, 1, GetJobPolicy(), nullptr);
                 }
                 else
                 {
                     mergedScopes.push_back(&scope);
                     FrameGraphExecuteGroupPrimary* multiScopeContextGroup = AddGroup<FrameGraphExecuteGroupPrimary>();
                     multiScopeContextGroup->SetName(scope.GetName());
-                    multiScopeContextGroup->Init(static_cast<Device&>(scope.GetDevice()), AZStd::move(mergedScopes));
+                    multiScopeContextGroup->Init(static_cast<Device&>(scope.GetDevice()), AZStd::move(mergedScopes), nullptr);
                 }
                 scopePrev = &scope;
             }
@@ -158,7 +177,45 @@ namespace AZ
                         mergedHardwareQueueClass = scope.GetHardwareQueueClass();
                         mergedDeviceIndex = scope.GetDeviceIndex();
                         FrameGraphExecuteGroupPrimary* multiScopeContextGroup = AddGroup<FrameGraphExecuteGroupPrimary>();
-                        multiScopeContextGroup->Init(static_cast<Device&>(scopePrev->GetDevice()), AZStd::move(mergedScopes));
+                        multiScopeContextGroup->Init(
+                            static_cast<Device&>(scopePrev->GetDevice()), AZStd::move(mergedScopes), currentSemaphoreHandle);
+                    }
+                }
+
+                if (useSemaphoreTrackers)
+                {
+                    for (auto& fence : scope.GetSignalFences())
+                    {
+                        auto it = userFencesSignalledMap.find(fence.get());
+                        if (it == userFencesSignalledMap.end())
+                        {
+                            userFencesSignalledMap[fence.get()] = false;
+                            numUnwaitedFences++;
+                        }
+                    }
+                    for (auto& fence : scope.GetWaitFences())
+                    {
+                        auto it = userFencesSignalledMap.find(fence.get());
+                        if (it != userFencesSignalledMap.end())
+                        {
+                            if (!it->second)
+                            {
+                                numUnwaitedFences--;
+                            }
+                        }
+                        userFencesSignalledMap[fence.get()] = true;
+                    }
+                    semaphoreTrackers->AddSemaphores(scope.GetWaitSemaphores().size() + scope.GetWaitFences().size());
+
+                    for (auto& swapchain : scope.GetSwapChainsToPresent())
+                    {
+                        semaphoreTrackers->AddSemaphores(numUnwaitedFences);
+                        numUnwaitedFences = 0;
+                        userFencesSignalledMap.clear();
+                        // TODO no need to create a separate tracker for multiple swap chains in the same group
+                        auto vulkanSwapChain = static_cast<SwapChain*>(swapchain);
+                        vulkanSwapChain->SetSemaphoreTracker(semaphoreTrackers->GetCurrentTracker());
+                        currentSemaphoreHandle = semaphoreTrackers->CreateHandle();
                     }
                 }
 
@@ -175,7 +232,8 @@ namespace AZ
                     // And then create a new group for the current scope with dedicated [1, N] secondary command lists
                     const uint32_t commandListCount = AZStd::max(AZ::DivideAndRoundUp(totalScopeCost, CommandListCostThreshold), 1u);
                     FrameGraphExecuteGroupSecondary* scopeContextGroup = AddGroup<FrameGraphExecuteGroupSecondary>();
-                    scopeContextGroup->Init(static_cast<Device&>(scope.GetDevice()), scope, commandListCount, GetJobPolicy());
+                    scopeContextGroup->Init(
+                        static_cast<Device&>(scope.GetDevice()), scope, commandListCount, GetJobPolicy(), currentSemaphoreHandle);
                 }
                 scopePrev = &scope;
             }
@@ -186,7 +244,8 @@ namespace AZ
                 mergedGroupCost = 0;
                 mergedSwapchainCount = 0;
                 FrameGraphExecuteGroupPrimary* multiScopeContextGroup = AddGroup<FrameGraphExecuteGroupPrimary>();
-                multiScopeContextGroup->Init(static_cast<Device&>(mergedScopes.front()->GetDevice()), AZStd::move(mergedScopes));
+                multiScopeContextGroup->Init(
+                    static_cast<Device&>(mergedScopes.front()->GetDevice()), AZStd::move(mergedScopes), currentSemaphoreHandle);
             }
 #endif
             // Create the handlers to manage the execute groups.
@@ -207,7 +266,7 @@ namespace AZ
                     {
                         groupRefs.push_back(groups[groupRefIndex].get());
                     }
-                    AddExecuteGroupHandler(groupId, groupRefs);
+                    AddExecuteGroupHandler(groupId, groupRefs, group->GetFenceTracker());
                     groupId = group->GetGroupId();
                     initGroupIndex = i;
                 }
@@ -219,7 +278,8 @@ namespace AZ
             {
                 groupRefs.push_back(groups[groupRefIndex].get());
             }
-            AddExecuteGroupHandler(groupId, groupRefs);
+            const FrameGraphExecuteGroup* group = static_cast<const FrameGraphExecuteGroup*>(groupRefs.back());
+            AddExecuteGroupHandler(groupId, groupRefs, group->GetFenceTracker());
         }
 
         void FrameGraphExecuter::ExecuteGroupInternal(RHI::FrameGraphExecuteGroup& groupBase)
@@ -241,7 +301,10 @@ namespace AZ
             m_groupHandlers.clear();
         }
 
-        void FrameGraphExecuter::AddExecuteGroupHandler(const RHI::GraphGroupId& groupId, const AZStd::vector<RHI::FrameGraphExecuteGroup*>& groups)
+        void FrameGraphExecuter::AddExecuteGroupHandler(
+            const RHI::GraphGroupId& groupId,
+            const AZStd::vector<RHI::FrameGraphExecuteGroup*>& groups,
+            AZStd::shared_ptr<FenceTracker> fenceTracker)
         {
             if (groups.empty())
             {
@@ -253,7 +316,7 @@ namespace AZ
                 static_cast<FrameGraphExecuteGroupHandler*>(aznew FrameGraphExecuteGroupPrimaryHandler) :
                 static_cast<FrameGraphExecuteGroupHandler*>(aznew FrameGraphExecuteGroupSecondaryHandler));
 
-            handler->Init(static_cast<FrameGraphExecuteGroup*>(groups.front())->GetDevice(), groups);
+            handler->Init(static_cast<FrameGraphExecuteGroup*>(groups.front())->GetDevice(), groups, fenceTracker);
             m_groupHandlers.insert({ groupId, AZStd::move(handler) });
         }
     }

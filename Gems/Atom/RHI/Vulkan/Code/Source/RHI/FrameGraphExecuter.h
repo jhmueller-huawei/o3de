@@ -42,7 +42,10 @@ namespace AZ
             //////////////////////////////////////////////////////////////////////////
 
             // Adds a handler for a list of execute groups.
-            void AddExecuteGroupHandler(const RHI::GraphGroupId& groupId, const AZStd::vector<RHI::FrameGraphExecuteGroup*>& groups);
+            void AddExecuteGroupHandler(
+                const RHI::GraphGroupId& groupId,
+                const AZStd::vector<RHI::FrameGraphExecuteGroup*>& groups,
+                AZStd::shared_ptr<FenceTracker> fenceTracker);
 
             // List of handlers for execute groups.
             AZStd::unordered_map<RHI::GraphGroupId, AZStd::unique_ptr<FrameGraphExecuteGroupHandler>> m_groupHandlers;
