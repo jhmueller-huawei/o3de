@@ -18,7 +18,6 @@
 #include <Atom/RPI.Public/Scene.h>
 #include <Atom/RPI.Public/View.h>
 
-
 namespace AZ
 {
     namespace RPI
@@ -116,11 +115,12 @@ namespace AZ
 
             else if (m_copyMode == CopyMode::DifferentDevicesIntermediateHost)
             {
-                auto* device1 = RHI::RHISystemInterface::Get()->GetDevice(m_data.m_sourceDeviceIndex >= 0 ? m_data.m_sourceDeviceIndex : 0);
+                [[maybe_unused]] auto* device1 =
+                    RHI::RHISystemInterface::Get()->GetDevice(m_data.m_sourceDeviceIndex >= 0 ? m_data.m_sourceDeviceIndex : 0);
                 AZ_Assert(
                     device1->GetFeatures().m_signalFenceFromCPU,
                     "CopyPass: Device to device copy is only possible if all devices support signalling fences from the CPU");
-                auto* device2 =
+                [[maybe_unused]] auto* device2 =
                     RHI::RHISystemInterface::Get()->GetDevice(m_data.m_destinationDeviceIndex >= 0 ? m_data.m_destinationDeviceIndex : 0);
                 AZ_Assert(
                     device2->GetFeatures().m_signalFenceFromCPU,
@@ -208,11 +208,19 @@ namespace AZ
             {
                 for (auto& fence : m_device1SignalFence)
                 {
-                    fence->GetDeviceFence(m_data.m_sourceDeviceIndex >= 0 ? m_data.m_sourceDeviceIndex : 0)->WaitOnCpu();
+                    fence
+                        ->GetDeviceFence(
+                            m_data.m_sourceDeviceIndex != RHI::MultiDevice::InvalidDeviceIndex ? m_data.m_sourceDeviceIndex
+                                                                                               : RHI::MultiDevice::DefaultDeviceIndex)
+                        ->WaitOnCpu();
                 }
                 for (auto& fence : m_device2WaitFence)
                 {
-                    fence->GetDeviceFence(m_data.m_destinationDeviceIndex >= 0 ? m_data.m_destinationDeviceIndex : 0)->WaitOnCpu();
+                    fence
+                        ->GetDeviceFence(
+                            m_data.m_destinationDeviceIndex != RHI::MultiDevice::InvalidDeviceIndex ? m_data.m_destinationDeviceIndex
+                                                                                                    : RHI::MultiDevice::DefaultDeviceIndex)
+                        ->WaitOnCpu();
                 }
             }
         }
@@ -340,23 +348,6 @@ namespace AZ
             }
 
             frameGraph.SignalFence(*m_device1SignalFence[m_currentBufferIndex]);
-
-            m_device1SignalFence[m_currentBufferIndex]
-                ->GetDeviceFence(m_data.m_sourceDeviceIndex)
-                ->WaitOnCpuAsync(
-                    [this, bufferIndex = m_currentBufferIndex]()
-                    {
-                        auto bufferSize = m_device2HostBuffer[bufferIndex]->GetBufferSize();
-                        void* data1 = m_device1HostBuffer[bufferIndex]->Map(bufferSize, 0)[m_data.m_sourceDeviceIndex];
-                        void* data2 = m_device2HostBuffer[bufferIndex]->Map(bufferSize, 0)[m_data.m_destinationDeviceIndex];
-                        memcpy(data2, data1, bufferSize);
-                        m_device1HostBuffer[bufferIndex]->Unmap();
-                        m_device2HostBuffer[bufferIndex]->Unmap();
-
-                        // m_device1HostBuffer[bufferIndex].reset();
-
-                        m_device2WaitFence[bufferIndex]->SignalOnCpu();
-                    });
         }
 
         void CopyPass::CompileResourcesDeviceToHost(const RHI::FrameGraphCompileContext& context)
@@ -488,6 +479,26 @@ namespace AZ
             {
                 context.GetCommandList()->Submit(m_copyItemDeviceToHost.GetDeviceCopyItem(context.GetDeviceIndex()));
             }
+
+            m_device1SignalFence[m_currentBufferIndex]
+                ->GetDeviceFence(context.GetDeviceIndex())
+                ->WaitOnCpuAsync(
+                    [this, bufferIndex = m_currentBufferIndex, fenceTracker = context.GetFenceTracker()]()
+                    // [this, bufferIndex = m_currentBufferIndex]()
+                    {
+                        auto bufferSize = m_device2HostBuffer[bufferIndex]->GetBufferSize();
+                        void* data1 = m_device1HostBuffer[bufferIndex]->Map(bufferSize, 0)[m_data.m_sourceDeviceIndex];
+                        void* data2 = m_device2HostBuffer[bufferIndex]->Map(bufferSize, 0)[m_data.m_destinationDeviceIndex];
+                        memcpy(data2, data1, bufferSize);
+                        m_device1HostBuffer[bufferIndex]->Unmap();
+                        m_device2HostBuffer[bufferIndex]->Unmap();
+
+                        m_device2WaitFence[bufferIndex]->GetDeviceFence(m_data.m_destinationDeviceIndex)->SignalOnCpu();
+                        if (fenceTracker)
+                        {
+                            fenceTracker->SignalUserSemaphore();
+                        }
+                    });
         }
 
         void CopyPass::SetupFrameGraphDependenciesHostToDevice(RHI::FrameGraphInterface frameGraph)
