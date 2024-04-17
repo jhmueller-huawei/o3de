@@ -58,7 +58,7 @@ namespace AZ
             const AZStd::shared_ptr<SemaphoreTracker>& GetCurrentTracker();
 
         private:
-            void SignalSemaphores(int countTrackers, int numSemphores);
+            void SignalSemaphores(int firstSemaphoreToTrigger, int numSemphores);
 
             AZStd::vector<AZStd::shared_ptr<SemaphoreTracker>> m_trackers;
             int m_semaphoreCount = 0;
@@ -70,11 +70,11 @@ namespace AZ
         class SemaphoreTrackerHandle
         {
         public:
-            SemaphoreTrackerHandle(AZStd::intrusive_ptr<SemaphoreTrackerCollection> tracker, int countTrackers);
+            SemaphoreTrackerHandle(AZStd::intrusive_ptr<SemaphoreTrackerCollection> tracker, int firstSemaphoreToTrigger);
             void SignalSemaphores(int numSemaphores);
 
         private:
-            int m_countTrackers = 0;
+            int m_firstSemaphoreToTrigger = 0;
             AZStd::intrusive_ptr<SemaphoreTrackerCollection> m_tracker;
         };
 

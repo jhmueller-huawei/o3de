@@ -99,7 +99,7 @@ namespace AZ
                 submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
                 submitInfo.pNext = nullptr;
 
-                hasTimelineSemaphore =
+                hasTimelineSemaphore |=
                     (fenceToSignal && fenceToSignal->GetFenceType() == FenceType::TimelineSemaphore) || !fencesToWaitFor.empty();
 
                 if (hasTimelineSemaphore)

@@ -36,13 +36,14 @@ namespace AZ
 #endif
             SetJobPolicy(graphJobPolicy);
         }
-        
+
         RHI::ResultCode FrameGraphExecuter::InitInternal(const RHI::FrameGraphExecuterDescriptor& descriptor)
         {
             for (auto& [deviceIndex, platformLimitsDescriptor] : descriptor.m_platformLimitsDescriptors)
             {
                 const RHI::ConstPtr<RHI::PlatformLimitsDescriptor> rhiPlatformLimitsDescriptor = platformLimitsDescriptor;
-                if (RHI::ConstPtr<PlatformLimitsDescriptor> vkPlatformLimitsDesc = azrtti_cast<const PlatformLimitsDescriptor*>(rhiPlatformLimitsDescriptor))
+                if (RHI::ConstPtr<PlatformLimitsDescriptor> vkPlatformLimitsDesc =
+                        azrtti_cast<const PlatformLimitsDescriptor*>(rhiPlatformLimitsDescriptor))
                 {
                     m_frameGraphExecuterData[deviceIndex] = vkPlatformLimitsDesc->m_frameGraphExecuterData;
                 }
@@ -91,8 +92,8 @@ namespace AZ
                 auto nextIter = it + 1;
                 scopeNext = nextIter != scopes.end() ? static_cast<const Scope*>(*nextIter) : nullptr;
                 const bool subpassGroup = (scopeNext && scopeNext->GetFrameGraphGroupId() == scope.GetFrameGraphGroupId()) ||
-                                          (scopePrev && scopePrev->GetFrameGraphGroupId() == scope.GetFrameGraphGroupId());
-                
+                    (scopePrev && scopePrev->GetFrameGraphGroupId() == scope.GetFrameGraphGroupId());
+
                 if (subpassGroup)
                 {
                     FrameGraphExecuteGroupSecondary* scopeContextGroup = AddGroup<FrameGraphExecuteGroupSecondary>();
@@ -108,7 +109,7 @@ namespace AZ
                 scopePrev = &scope;
             }
 #else
-            
+
             RHI::HardwareQueueClass mergedHardwareQueueClass = RHI::HardwareQueueClass::Graphics;
             uint32_t mergedGroupCost = 0;
             uint32_t mergedSwapchainCount = 0;
@@ -128,22 +129,20 @@ namespace AZ
 
                 const uint32_t estimatedItemCount = scope.GetEstimatedItemCount();
 
-                const uint32_t CommandListCostThreshold =
-                    AZStd::max(
-                        m_frameGraphExecuterData[scope.GetDeviceIndex()].m_commandListCostThresholdMin,
-                        AZ::DivideAndRoundUp(estimatedItemCount, m_frameGraphExecuterData[scope.GetDeviceIndex()].m_commandListsPerScopeMax));
+                const uint32_t CommandListCostThreshold = AZStd::max(
+                    m_frameGraphExecuterData[scope.GetDeviceIndex()].m_commandListCostThresholdMin,
+                    AZ::DivideAndRoundUp(estimatedItemCount, m_frameGraphExecuterData[scope.GetDeviceIndex()].m_commandListsPerScopeMax));
 
                 /**
-                    * Computes a cost heuristic based on the number of items and number of attachments in
-                    * the scope. This cost is used to partition command list generation.
-                    */
-                const uint32_t totalScopeCost =
-                    estimatedItemCount * m_frameGraphExecuterData[scope.GetDeviceIndex()].m_itemCost +
-                    static_cast<uint32_t>(scope.GetAttachments().size()) * m_frameGraphExecuterData[scope.GetDeviceIndex()].m_attachmentCost;
+                 * Computes a cost heuristic based on the number of items and number of attachments in
+                 * the scope. This cost is used to partition command list generation.
+                 */
+                const uint32_t totalScopeCost = estimatedItemCount * m_frameGraphExecuterData[scope.GetDeviceIndex()].m_itemCost +
+                    static_cast<uint32_t>(scope.GetAttachments().size()) *
+                        m_frameGraphExecuterData[scope.GetDeviceIndex()].m_attachmentCost;
 
                 // Check if we are in a middle of a framegraph group.
-                const bool subpassGroup =
-                    (scopeNext && scopeNext->GetFrameGraphGroupId() == scope.GetFrameGraphGroupId()) ||
+                const bool subpassGroup = (scopeNext && scopeNext->GetFrameGraphGroupId() == scope.GetFrameGraphGroupId()) ||
                     (scopePrev && scopePrev->GetFrameGraphGroupId() == scope.GetFrameGraphGroupId());
 
                 const uint32_t swapchainCount = static_cast<uint32_t>(scope.GetSwapChainsToPresent().size());
@@ -154,7 +153,8 @@ namespace AZ
                     const bool exceededCommandCost = (mergedGroupCost + totalScopeCost) > CommandListCostThreshold;
 
                     // Check if the swap chains fit into this group.
-                    const bool exceededSwapChainLimit = (mergedSwapchainCount + swapchainCount) > m_frameGraphExecuterData[scope.GetDeviceIndex()].m_swapChainsPerCommandList;
+                    const bool exceededSwapChainLimit = (mergedSwapchainCount + swapchainCount) >
+                        m_frameGraphExecuterData[scope.GetDeviceIndex()].m_swapChainsPerCommandList;
 
                     // Check if the hardware queue classes match.
                     const bool hardwareQueueMismatch = scope.GetHardwareQueueClass() != mergedHardwareQueueClass;
@@ -167,7 +167,8 @@ namespace AZ
                     const bool deviceMismatch = mergedDeviceIndex != scope.GetDeviceIndex();
 
                     // If we exceeded limits, then flush the group.
-                    const bool flushMergedScopes = exceededCommandCost || exceededSwapChainLimit || hardwareQueueMismatch || onSyncBoundaries || deviceMismatch || subpassGroup;
+                    const bool flushMergedScopes = exceededCommandCost || exceededSwapChainLimit || hardwareQueueMismatch ||
+                        onSyncBoundaries || deviceMismatch || subpassGroup;
 
                     if (flushMergedScopes && mergedScopes.size())
                     {
@@ -184,6 +185,10 @@ namespace AZ
 
                 if (useSemaphoreTrackers)
                 {
+                    if (scopePrev && !scopePrev->GetSwapChainsToPresent().empty())
+                    {
+                        currentSemaphoreHandle = semaphoreTrackers->CreateHandle();
+                    }
                     for (auto& fence : scope.GetSignalFences())
                     {
                         auto it = userFencesSignalledMap.find(fence.get());
@@ -215,7 +220,6 @@ namespace AZ
                         // TODO no need to create a separate tracker for multiple swap chains in the same group
                         auto vulkanSwapChain = static_cast<SwapChain*>(swapchain);
                         vulkanSwapChain->SetSemaphoreTracker(semaphoreTrackers->GetCurrentTracker());
-                        currentSemaphoreHandle = semaphoreTrackers->CreateHandle();
                     }
                 }
 
@@ -266,7 +270,7 @@ namespace AZ
                     {
                         groupRefs.push_back(groups[groupRefIndex].get());
                     }
-                    AddExecuteGroupHandler(groupId, groupRefs, group->GetFenceTracker());
+                    AddExecuteGroupHandler(groupId, groupRefs);
                     groupId = group->GetGroupId();
                     initGroupIndex = i;
                 }
@@ -278,8 +282,7 @@ namespace AZ
             {
                 groupRefs.push_back(groups[groupRefIndex].get());
             }
-            const FrameGraphExecuteGroup* group = static_cast<const FrameGraphExecuteGroup*>(groupRefs.back());
-            AddExecuteGroupHandler(groupId, groupRefs, group->GetFenceTracker());
+            AddExecuteGroupHandler(groupId, groupRefs);
         }
 
         void FrameGraphExecuter::ExecuteGroupInternal(RHI::FrameGraphExecuteGroup& groupBase)
@@ -288,7 +291,8 @@ namespace AZ
             auto findIter = m_groupHandlers.find(group.GetGroupId());
             AZ_Assert(findIter != m_groupHandlers.end(), "Could not find group handler for groupId %d", group.GetGroupId().GetIndex());
             FrameGraphExecuteGroupHandler* handler = findIter->second.get();
-            // Wait until all execute groups of the handler has finished and also make sure that the handler itself hasn't executed already (which is possible for parallel encoding).
+            // Wait until all execute groups of the handler has finished and also make sure that the handler itself hasn't executed already
+            // (which is possible for parallel encoding).
             if (!handler->IsExecuted() && handler->IsComplete())
             {
                 // This will execute the recorded work into the queue.
@@ -302,9 +306,7 @@ namespace AZ
         }
 
         void FrameGraphExecuter::AddExecuteGroupHandler(
-            const RHI::GraphGroupId& groupId,
-            const AZStd::vector<RHI::FrameGraphExecuteGroup*>& groups,
-            AZStd::shared_ptr<FenceTracker> fenceTracker)
+            const RHI::GraphGroupId& groupId, const AZStd::vector<RHI::FrameGraphExecuteGroup*>& groups)
         {
             if (groups.empty())
             {
@@ -312,12 +314,14 @@ namespace AZ
             }
 
             // Add the handler depending on the number of execute groups.
-            AZStd::unique_ptr<FrameGraphExecuteGroupHandler> handler(groups.size() == 1 && azrtti_cast<FrameGraphExecuteGroupPrimary*>(groups.front()) ?
-                static_cast<FrameGraphExecuteGroupHandler*>(aznew FrameGraphExecuteGroupPrimaryHandler) :
-                static_cast<FrameGraphExecuteGroupHandler*>(aznew FrameGraphExecuteGroupSecondaryHandler));
+            AZStd::unique_ptr<FrameGraphExecuteGroupHandler> handler(
+                groups.size() == 1 && azrtti_cast<FrameGraphExecuteGroupPrimary*>(groups.front())
+                    ? static_cast<FrameGraphExecuteGroupHandler*>(aznew FrameGraphExecuteGroupPrimaryHandler)
+                    : static_cast<FrameGraphExecuteGroupHandler*>(aznew FrameGraphExecuteGroupSecondaryHandler));
 
-            handler->Init(static_cast<FrameGraphExecuteGroup*>(groups.front())->GetDevice(), groups, fenceTracker);
+            auto firstGroup = static_cast<FrameGraphExecuteGroup*>(groups.front());
+            handler->Init(static_cast<FrameGraphExecuteGroup*>(groups.front())->GetDevice(), groups, firstGroup->GetFenceTracker());
             m_groupHandlers.insert({ groupId, AZStd::move(handler) });
         }
-    }
-}
+    } // namespace Vulkan
+} // namespace AZ

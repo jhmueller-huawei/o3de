@@ -50,8 +50,14 @@ namespace AZ
 
                 void ResetObject(Semaphore& semaphore)
                 {
-                    semaphore.ResetSignalEvent();
-                    // semaphore.Reset();
+                    if (semaphore.GetType() == SemaphoreType::Binary)
+                    {
+                        semaphore.ResetSignalEvent();
+                    }
+                    else
+                    {
+                        semaphore.IncrementPendingValue();
+                    }
                 }
                 void ShutdownObject(Semaphore& semaphore, bool isPoolShutdown)
                 {

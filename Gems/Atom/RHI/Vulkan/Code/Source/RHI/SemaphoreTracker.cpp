@@ -52,7 +52,7 @@ namespace AZ
         {
             m_trackers.emplace_back(AZStd::make_unique<SemaphoreTracker>(m_semaphoreCount));
             auto result =
-                AZStd::make_shared<SemaphoreTrackerHandle>(AZStd::intrusive_ptr<SemaphoreTrackerCollection>(this), m_trackers.size());
+                AZStd::make_shared<SemaphoreTrackerHandle>(AZStd::intrusive_ptr<SemaphoreTrackerCollection>(this), m_trackers.size() - 1);
             return result;
         }
 
@@ -61,23 +61,24 @@ namespace AZ
             return m_trackers.back();
         };
 
-        void SemaphoreTrackerCollection::SignalSemaphores(int countTrackers, int numSemphores)
+        void SemaphoreTrackerCollection::SignalSemaphores(int firstSemaphoreToTrigger, int numSemphores)
         {
-            for (int i = 0; i < countTrackers; i++)
+            for (int i = firstSemaphoreToTrigger; i < m_trackers.size(); i++)
             {
                 m_trackers[i]->SignalSemaphores(numSemphores);
             }
         }
 
-        SemaphoreTrackerHandle::SemaphoreTrackerHandle(AZStd::intrusive_ptr<SemaphoreTrackerCollection> tracker, int countTrackers)
-            : m_countTrackers(countTrackers)
+        SemaphoreTrackerHandle::SemaphoreTrackerHandle(
+            AZStd::intrusive_ptr<SemaphoreTrackerCollection> tracker, int firstSemaphoreToTrigger)
+            : m_firstSemaphoreToTrigger(firstSemaphoreToTrigger)
             , m_tracker(tracker)
         {
         }
 
         void SemaphoreTrackerHandle::SignalSemaphores(int numSemaphores)
         {
-            m_tracker->SignalSemaphores(m_countTrackers, numSemaphores);
+            m_tracker->SignalSemaphores(m_firstSemaphoreToTrigger, numSemaphores);
         }
 
     } // namespace Vulkan
