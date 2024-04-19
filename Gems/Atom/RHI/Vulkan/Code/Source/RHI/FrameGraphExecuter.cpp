@@ -78,7 +78,7 @@ namespace AZ
             bool useSemaphoreTrackers = frameGraph.GetScopes().front()->GetDevice().GetFeatures().m_signalFenceFromCPU;
             if (useSemaphoreTrackers)
             {
-                semaphoreTrackers = new SemaphoreTrackerCollection;
+                semaphoreTrackers = aznew SemaphoreTrackerCollection;
                 currentSemaphoreHandle = semaphoreTrackers->CreateHandle();
             }
 
