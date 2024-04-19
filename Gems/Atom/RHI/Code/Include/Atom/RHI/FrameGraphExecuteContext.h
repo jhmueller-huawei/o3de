@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include <Atom/RHI/CommandList.h>
 #include <Atom/RHI.Reflect/AttachmentId.h>
 #include <Atom/RHI.Reflect/ScopeId.h>
-#include <Atom/RHI/CommandList.h>
 
 namespace AZ::RHI
 {
@@ -52,7 +52,6 @@ namespace AZ::RHI
 
         /// Returns the submit range for this context.
         const CommandList::SubmitRange& GetSubmitRange() const { return m_descriptor.m_submitRange; }
-
         //////////////////////////////////////////////////////////////////////////
 
         //! Allows setting a command list after initialization (e.g. BeginContextInternal).

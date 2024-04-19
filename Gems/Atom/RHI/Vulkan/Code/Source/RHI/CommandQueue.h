@@ -11,9 +11,8 @@
 #include <Atom/RHI/Object.h>
 #include <Atom/RHI/SingleDeviceSwapChain.h>
 #include <RHI/CommandList.h>
-#include <RHI/Queue.h>
 #include <RHI/Semaphore.h>
-
+#include <RHI/Queue.h>
 
 namespace AZ
 {

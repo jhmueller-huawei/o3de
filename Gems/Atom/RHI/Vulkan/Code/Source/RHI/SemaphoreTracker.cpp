@@ -5,9 +5,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  */
-#pragma once
-
-#include "SemaphoreTracker.h"
+#include <RHI/SemaphoreTracker.h>
 
 namespace AZ
 {
