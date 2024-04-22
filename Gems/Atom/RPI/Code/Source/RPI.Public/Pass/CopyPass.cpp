@@ -483,7 +483,7 @@ namespace AZ
             m_device1SignalFence[m_currentBufferIndex]
                 ->GetDeviceFence(context.GetDeviceIndex())
                 ->WaitOnCpuAsync(
-                    [this, bufferIndex = m_currentBufferIndex, fenceTracker = context.GetFenceTracker()]()
+                    [this, bufferIndex = m_currentBufferIndex]()
                     // [this, bufferIndex = m_currentBufferIndex]()
                     {
                         auto bufferSize = m_device2HostBuffer[bufferIndex]->GetBufferSize();
@@ -494,10 +494,6 @@ namespace AZ
                         m_device2HostBuffer[bufferIndex]->Unmap();
 
                         m_device2WaitFence[bufferIndex]->GetDeviceFence(m_data.m_destinationDeviceIndex)->SignalOnCpu();
-                        if (fenceTracker)
-                        {
-                            fenceTracker->SignalUserSemaphore();
-                        }
                     });
         }
 
