@@ -6,24 +6,27 @@
  *
  */
 
-#include <Atom_RHI_Vulkan_Platform.h>
+#include <Atom/RHI.Reflect/VkAllocator.h>
+#include <Atom/RHI.Reflect/Vulkan/Conversion.h>
 #include <Atom/RHI.Reflect/Vulkan/PlatformLimitsDescriptor.h>
 #include <Atom/RHI.Reflect/Vulkan/VulkanBus.h>
 #include <Atom/RHI.Reflect/Vulkan/XRVkDescriptors.h>
 #include <Atom/RHI/Factory.h>
-#include <Atom/RHI/RHISystemInterface.h>
 #include <Atom/RHI/RHIMemoryStatisticsInterface.h>
+#include <Atom/RHI/RHISystemInterface.h>
 #include <Atom/RHI/SingleDeviceTransientAttachmentPool.h>
+#include <Atom_RHI_Vulkan_Platform.h>
+#include <AzCore/Debug/Trace.h>
 #include <AzCore/std/containers/set.h>
 #include <AzCore/std/containers/vector.h>
-#include <AzCore/Debug/Trace.h>
 #include <RHI/AsyncUploadQueue.h>
 #include <RHI/Buffer.h>
 #include <RHI/BufferPool.h>
-#include <Atom/RHI.Reflect/Vulkan/Conversion.h>
 #include <RHI/CommandList.h>
 #include <RHI/CommandQueue.h>
 #include <RHI/Device.h>
+#include <RHI/Fence.h>
+#include <RHI/FenceTimelineSemaphore.h>
 #include <RHI/GraphicsPipeline.h>
 #include <RHI/ImagePool.h>
 #include <RHI/Instance.h>
@@ -32,7 +35,6 @@
 #include <RHI/WSISurface.h>
 #include <RHI/WindowSurfaceBus.h>
 #include <Vulkan_Traits_Platform.h>
-#include <Atom/RHI.Reflect/VkAllocator.h>
 
 namespace AZ
 {
@@ -138,7 +140,8 @@ namespace AZ
             }
             else
             {
-                m_supportedPipelineStageFlagsMask &= ~(VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT);
+                m_supportedPipelineStageFlagsMask &=
+                    ~(VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT);
             }
 
             AZStd::vector<VkDeviceQueueCreateInfo> queueCreationInfo;
@@ -173,18 +176,30 @@ namespace AZ
             descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
             const VkPhysicalDeviceDescriptorIndexingFeaturesEXT& physicalDeviceDescriptorIndexingFeatures =
                 physicalDevice.GetPhysicalDeviceDescriptorIndexingFeatures();
-            descriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing = physicalDeviceDescriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing;
-            descriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing = physicalDeviceDescriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing;
-            descriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing = physicalDeviceDescriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing;
-            descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing;
-            descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;
-            descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing;
-            descriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing;
-            descriptorIndexingFeatures.shaderInputAttachmentArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderInputAttachmentArrayNonUniformIndexing;
-            descriptorIndexingFeatures.shaderUniformTexelBufferArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderUniformTexelBufferArrayNonUniformIndexing;
-            descriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing = physicalDeviceDescriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing;
-            descriptorIndexingFeatures.descriptorBindingPartiallyBound = physicalDeviceDescriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing;
-            descriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount;
+            descriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing;
+            descriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing;
+            descriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing;
+            descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing;
+            descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;
+            descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing;
+            descriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing;
+            descriptorIndexingFeatures.shaderInputAttachmentArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderInputAttachmentArrayNonUniformIndexing;
+            descriptorIndexingFeatures.shaderUniformTexelBufferArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderUniformTexelBufferArrayNonUniformIndexing;
+            descriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing =
+                physicalDeviceDescriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing;
+            descriptorIndexingFeatures.descriptorBindingPartiallyBound =
+                physicalDeviceDescriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing;
+            descriptorIndexingFeatures.descriptorBindingVariableDescriptorCount =
+                physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount;
             descriptorIndexingFeatures.runtimeDescriptorArray = physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray;
             descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind =
                 physicalDeviceDescriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind;
@@ -194,9 +209,9 @@ namespace AZ
                 physicalDeviceDescriptorIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind;
 
             auto bufferDeviceAddressFeatures = physicalDevice.GetPhysicalDeviceBufferDeviceAddressFeatures();
-            auto depthClipEnabled = physicalDevice.GetPhysicalDeviceDepthClipEnableFeatures();            
-            auto rayQueryFeatures = physicalDevice.GetRayQueryFeatures();            
-            auto shaderImageAtomicInt64 = physicalDevice.GetShaderImageAtomicInt64Features();            
+            auto depthClipEnabled = physicalDevice.GetPhysicalDeviceDepthClipEnableFeatures();
+            auto rayQueryFeatures = physicalDevice.GetRayQueryFeatures();
+            auto shaderImageAtomicInt64 = physicalDevice.GetShaderImageAtomicInt64Features();
 
             VkPhysicalDeviceRobustness2FeaturesEXT robustness2 = {};
             robustness2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
@@ -209,14 +224,7 @@ namespace AZ
             robustness2.pNext = nullptr;
 
             AppendVkStruct(
-                chainInit,
-                {
-                    &bufferDeviceAddressFeatures,
-                    &depthClipEnabled,
-                    &rayQueryFeatures,
-                    &shaderImageAtomicInt64,
-                    &robustness2
-                });
+                chainInit, { &bufferDeviceAddressFeatures, &depthClipEnabled, &rayQueryFeatures, &shaderImageAtomicInt64, &robustness2 });
 
             auto fragmenDensityMapFeatures = physicalDevice.GetPhysicalDeviceFragmentDensityMapFeatures();
             auto fragmenShadingRateFeatures = physicalDevice.GetPhysicalDeviceFragmentShadingRateFeatures();
@@ -254,33 +262,45 @@ namespace AZ
                 vulkan12Features.drawIndirectCount = physicalDevice.GetPhysicalDeviceVulkan12Features().drawIndirectCount;
                 vulkan12Features.shaderFloat16 = physicalDevice.GetPhysicalDeviceVulkan12Features().shaderFloat16;
                 vulkan12Features.shaderInt8 = physicalDevice.GetPhysicalDeviceVulkan12Features().shaderInt8;
-                vulkan12Features.separateDepthStencilLayouts = physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
-                vulkan12Features.descriptorBindingPartiallyBound = physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
+                vulkan12Features.separateDepthStencilLayouts =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
+                vulkan12Features.descriptorBindingPartiallyBound =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
                 vulkan12Features.descriptorIndexing = physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
-                vulkan12Features.descriptorBindingVariableDescriptorCount = physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
-                // We use the "VkPhysicalDeviceBufferDeviceAddressFeatures" instead of the "VkPhysicalDeviceVulkan12Features" for buffer device address
-                // because some drivers (e.g. Intel) don't report any features of buffer device address through the "PhysicalDeviceVulkan12Features" but they do
-                // through the "VK_EXT_buffer_device_address" extension.
+                vulkan12Features.descriptorBindingVariableDescriptorCount =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().separateDepthStencilLayouts;
+                // We use the "VkPhysicalDeviceBufferDeviceAddressFeatures" instead of the "VkPhysicalDeviceVulkan12Features" for buffer
+                // device address because some drivers (e.g. Intel) don't report any features of buffer device address through the
+                // "PhysicalDeviceVulkan12Features" but they do through the "VK_EXT_buffer_device_address" extension.
                 vulkan12Features.bufferDeviceAddress = physicalDevice.GetPhysicalDeviceBufferDeviceAddressFeatures().bufferDeviceAddress;
-                vulkan12Features.bufferDeviceAddressMultiDevice = physicalDevice.GetPhysicalDeviceBufferDeviceAddressFeatures().bufferDeviceAddressMultiDevice;
+                vulkan12Features.bufferDeviceAddressMultiDevice =
+                    physicalDevice.GetPhysicalDeviceBufferDeviceAddressFeatures().bufferDeviceAddressMultiDevice;
                 vulkan12Features.runtimeDescriptorArray = physicalDevice.GetPhysicalDeviceVulkan12Features().runtimeDescriptorArray;
                 vulkan12Features.shaderSharedInt64Atomics = physicalDevice.GetPhysicalDeviceVulkan12Features().shaderSharedInt64Atomics;
                 vulkan12Features.shaderBufferInt64Atomics = physicalDevice.GetPhysicalDeviceVulkan12Features().shaderBufferInt64Atomics;
-                vulkan12Features.descriptorBindingSampledImageUpdateAfterBind = physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingSampledImageUpdateAfterBind;
-                vulkan12Features.descriptorBindingStorageImageUpdateAfterBind = physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingStorageImageUpdateAfterBind;
-                vulkan12Features.descriptorBindingStorageBufferUpdateAfterBind = physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingStorageBufferUpdateAfterBind;
-                vulkan12Features.descriptorBindingPartiallyBound = physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingPartiallyBound;
-                vulkan12Features.descriptorBindingUpdateUnusedWhilePending = physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingUpdateUnusedWhilePending;
+                vulkan12Features.descriptorBindingSampledImageUpdateAfterBind =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingSampledImageUpdateAfterBind;
+                vulkan12Features.descriptorBindingStorageImageUpdateAfterBind =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingStorageImageUpdateAfterBind;
+                vulkan12Features.descriptorBindingStorageBufferUpdateAfterBind =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingStorageBufferUpdateAfterBind;
+                vulkan12Features.descriptorBindingPartiallyBound =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingPartiallyBound;
+                vulkan12Features.descriptorBindingUpdateUnusedWhilePending =
+                    physicalDevice.GetPhysicalDeviceVulkan12Features().descriptorBindingUpdateUnusedWhilePending;
                 vulkan12Features.shaderOutputViewportIndex = physicalDevice.GetPhysicalDeviceVulkan12Features().shaderOutputViewportIndex;
                 vulkan12Features.shaderOutputLayer = physicalDevice.GetPhysicalDeviceVulkan12Features().shaderOutputLayer;
                 vulkan12Features.timelineSemaphore = physicalDevice.GetPhysicalDeviceVulkan12Features().timelineSemaphore;
 
                 accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-                accelerationStructureFeatures.accelerationStructure = physicalDevice.GetPhysicalDeviceAccelerationStructureFeatures().accelerationStructure;
+                accelerationStructureFeatures.accelerationStructure =
+                    physicalDevice.GetPhysicalDeviceAccelerationStructureFeatures().accelerationStructure;
 
                 rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-                rayTracingPipelineFeatures.rayTracingPipeline = physicalDevice.GetPhysicalDeviceRayTracingPipelineFeatures().rayTracingPipeline;
-                rayTracingPipelineFeatures.rayTracingPipelineTraceRaysIndirect = physicalDevice.GetPhysicalDeviceRayTracingPipelineFeatures().rayTracingPipelineTraceRaysIndirect;
+                rayTracingPipelineFeatures.rayTracingPipeline =
+                    physicalDevice.GetPhysicalDeviceRayTracingPipelineFeatures().rayTracingPipeline;
+                rayTracingPipelineFeatures.rayTracingPipelineTraceRaysIndirect =
+                    physicalDevice.GetPhysicalDeviceRayTracingPipelineFeatures().rayTracingPipelineTraceRaysIndirect;
 
                 AppendVkStruct(chainInit, { &vulkan12Features, &accelerationStructureFeatures, &rayTracingPipelineFeatures });
                 // Do not start from the chainInit, but from the depthClipEnabled struct
@@ -292,7 +312,8 @@ namespace AZ
                 float16Int8.shaderFloat16 = physicalDevice.GetPhysicalDeviceFloat16Int8Features().shaderFloat16;
 
                 separateDepthStencil.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES;
-                separateDepthStencil.separateDepthStencilLayouts = physicalDevice.GetPhysicalDeviceSeparateDepthStencilFeatures().separateDepthStencilLayouts;
+                separateDepthStencil.separateDepthStencilLayouts =
+                    physicalDevice.GetPhysicalDeviceSeparateDepthStencilFeatures().separateDepthStencilLayouts;
 
                 shaderAtomicInt64.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
                 shaderAtomicInt64.shaderBufferInt64Atomics = physicalDevice.GetShaderAtomicInt64Features().shaderBufferInt64Atomics;
@@ -330,10 +351,7 @@ namespace AZ
 
             Instance& instance = Instance::GetInstance();
             const VkResult vkResult = instance.GetContext().CreateDevice(
-                physicalDevice.GetNativePhysicalDevice(),
-                &deviceInfo,
-                VkSystemAllocator::Get(),
-                &m_nativeDevice);
+                physicalDevice.GetNativePhysicalDevice(), &deviceInfo, VkSystemAllocator::Get(), &m_nativeDevice);
             AssertSuccess(vkResult);
             RETURN_RESULT_IF_UNSUCCESSFUL(ConvertResult(vkResult));
 
@@ -354,7 +372,7 @@ namespace AZ
                 delete[] queueInfo.pQueuePriorities;
             }
 
-            //Load device features now that we have loaded all extension info
+            // Load device features now that we have loaded all extension info
             physicalDevice.LoadSupportedFeatures(GetContext());
 
             if (!physicalDevice.IsOptionalDeviceExtensionSupported(OptionalDeviceExtension::FragmentShadingRate))
@@ -392,7 +410,6 @@ namespace AZ
             releaseQueueDescriptor.m_collectLatency = m_descriptor.m_frameCountMax - 1;
             m_releaseQueue.Init(releaseQueueDescriptor);
 
-
             // Set the cache sizes.
             m_renderPassCache.first.SetCapacity(RenderPassCacheCapacity);
             m_framebufferCache.first.SetCapacity(FrameBufferCacheCapacity);
@@ -417,8 +434,16 @@ namespace AZ
             swapChainSemaphoreAllocDescriptor.m_collectLatency = RHI::Limits::Device::FrameCountMax;
             m_swapChaiSemaphoreAllocator.Init(swapChainSemaphoreAllocDescriptor);
 
-            m_imageMemoryRequirementsCache.SetInitFunction([](auto& cache) { cache.set_capacity(MemoryRequirementsCacheSize); });
-            m_bufferMemoryRequirementsCache.SetInitFunction([](auto& cache) { cache.set_capacity(MemoryRequirementsCacheSize); });
+            m_imageMemoryRequirementsCache.SetInitFunction(
+                [](auto& cache)
+                {
+                    cache.set_capacity(MemoryRequirementsCacheSize);
+                });
+            m_bufferMemoryRequirementsCache.SetInitFunction(
+                [](auto& cache)
+                {
+                    cache.set_capacity(MemoryRequirementsCacheSize);
+                });
 
             m_stagingBufferPool = BufferPool::Create();
             RHI::BufferPoolDescriptor poolDesc;
@@ -440,7 +465,7 @@ namespace AZ
                 bufferPoolDescriptor.m_heapMemoryLevel = RHI::HeapMemoryLevel::Host;
                 result = m_constantBufferPool->Init(*this, bufferPoolDescriptor);
                 RETURN_RESULT_IF_UNSUCCESSFUL(result);
-            }           
+            }
 
             SetName(GetName());
             return result;
@@ -460,10 +485,9 @@ namespace AZ
         {
             const auto& physicalDevice = static_cast<const PhysicalDevice&>(GetPhysicalDevice());
             const VkPhysicalDeviceMemoryProperties& memProp = physicalDevice.GetMemoryProperties();
-            for ( uint32_t index = 0; index < memProp.memoryTypeCount; ++index)
+            for (uint32_t index = 0; index < memProp.memoryTypeCount; ++index)
             {
-                if (RHI::CheckBitsAll(memProp.memoryTypes[index].propertyFlags, memoryPropertyFlags) &&
-                    ((1 << index) & memoryTypeBits))
+                if (RHI::CheckBitsAll(memProp.memoryTypes[index].propertyFlags, memoryPropertyFlags) && ((1 << index) & memoryTypeBits))
                 {
                     return index;
                 }
@@ -488,7 +512,8 @@ namespace AZ
                 // This will not allocate or bind memory.
                 ImageCreateInfo createInfo = BuildImageCreateInfo(descriptor);
                 VkImage vkImage = VK_NULL_HANDLE;
-                VkResult vkResult = GetContext().CreateImage(GetNativeDevice(), &createInfo.m_vkCreateInfo, VkSystemAllocator::Get(), &vkImage);
+                VkResult vkResult =
+                    GetContext().CreateImage(GetNativeDevice(), &createInfo.m_vkCreateInfo, VkSystemAllocator::Get(), &vkImage);
                 AssertSuccess(vkResult);
 
                 VkMemoryRequirements memoryRequirements = {};
@@ -515,7 +540,8 @@ namespace AZ
                 // This will not allocate or bind memory.
                 BufferCreateInfo createInfo = BuildBufferCreateInfo(descriptor);
                 VkBuffer vkBuffer = VK_NULL_HANDLE;
-                VkResult vkResult = GetContext().CreateBuffer(GetNativeDevice(), &createInfo.m_vkCreateInfo, VkSystemAllocator::Get(), &vkBuffer);
+                VkResult vkResult =
+                    GetContext().CreateBuffer(GetNativeDevice(), &createInfo.m_vkCreateInfo, VkSystemAllocator::Get(), &vkBuffer);
                 AssertSuccess(vkResult);
 
                 VkMemoryRequirements memoryRequirements = {};
@@ -572,6 +598,18 @@ namespace AZ
             return m_swapChaiSemaphoreAllocator;
         }
 
+        RHI::Ptr<FenceBase> Device::CreateFence() const
+        {
+            if (GetFeatures().m_signalFenceFromCPU)
+            {
+                return FenceTimelineSemaphore::Create();
+            }
+            else
+            {
+                return Fence::Create();
+            }
+        }
+
         const AZStd::vector<VkQueueFamilyProperties>& Device::GetQueueFamilyProperties() const
         {
             return m_queueFamilyProperties;
@@ -582,7 +620,9 @@ namespace AZ
             if (!m_asyncUploadQueue)
             {
                 m_asyncUploadQueue = aznew AsyncUploadQueue();
-                AsyncUploadQueue::Descriptor asyncUploadQueueDescriptor(RHI::RHISystemInterface::Get()->GetPlatformLimitsDescriptor()->m_platformDefaultValues.m_asyncQueueStagingBufferSizeInBytes);
+                AsyncUploadQueue::Descriptor asyncUploadQueueDescriptor(RHI::RHISystemInterface::Get()
+                                                                            ->GetPlatformLimitsDescriptor()
+                                                                            ->m_platformDefaultValues.m_asyncQueueStagingBufferSizeInBytes);
                 asyncUploadQueueDescriptor.m_device = this;
                 m_asyncUploadQueue->Init(asyncUploadQueueDescriptor);
             }
@@ -644,12 +684,14 @@ namespace AZ
             return AcquireObjectFromCache(m_pipelineLayoutCache, descriptor.GetHash(), descriptor);
         }
 
-        RHI::Ptr<CommandList> Device::AcquireCommandList(uint32_t familyQueueIndex, VkCommandBufferLevel level /*=VK_COMMAND_BUFFER_LEVEL_PRIMARY*/)
+        RHI::Ptr<CommandList> Device::AcquireCommandList(
+            uint32_t familyQueueIndex, VkCommandBufferLevel level /*=VK_COMMAND_BUFFER_LEVEL_PRIMARY*/)
         {
             return m_commandListAllocator.Allocate(familyQueueIndex, level);
         }
 
-        RHI::Ptr<CommandList> Device::AcquireCommandList(RHI::HardwareQueueClass queueClass, VkCommandBufferLevel level /*=VK_COMMAND_BUFFER_LEVEL_PRIMARY*/)
+        RHI::Ptr<CommandList> Device::AcquireCommandList(
+            RHI::HardwareQueueClass queueClass, VkCommandBufferLevel level /*=VK_COMMAND_BUFFER_LEVEL_PRIMARY*/)
         {
             return m_commandListAllocator.Allocate(m_commandQueueContext.GetQueueFamilyIndex(queueClass), level);
         }
@@ -876,38 +918,47 @@ namespace AZ
                     flags |= RHI::FormatCapabilities::IndexBuffer;
                 }
 
-                if (RHI::CheckBitsAll(properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::RenderTarget;
                 }
 
-                if (RHI::CheckBitsAll(properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.optimalTilingFeatures,
+                        static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::DepthStencil;
                 }
 
-                if (RHI::CheckBitsAll(properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::Blend;
                 }
 
-                if (RHI::CheckBitsAll(properties.linearTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) ||
-                    RHI::CheckBitsAll(properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.linearTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) ||
+                    RHI::CheckBitsAll(
+                        properties.optimalTilingFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::Sample;
                 }
 
-                if (RHI::CheckBitsAll(properties.bufferFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.bufferFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::TypedLoadBuffer;
                 }
 
-                if (RHI::CheckBitsAll(properties.bufferFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.bufferFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::TypedStoreBuffer;
                 }
 
-                if (RHI::CheckBitsAll(properties.bufferFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT)))
+                if (RHI::CheckBitsAll(
+                        properties.bufferFeatures, static_cast<VkFormatFeatureFlags>(VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT)))
                 {
                     flags |= RHI::FormatCapabilities::AtomicBuffer;
                 }
@@ -928,10 +979,12 @@ namespace AZ
             }
         }
 
-        AZStd::chrono::microseconds Device::GpuTimestampToMicroseconds(uint64_t gpuTimestamp, [[maybe_unused]] RHI::HardwareQueueClass queueClass) const
+        AZStd::chrono::microseconds Device::GpuTimestampToMicroseconds(
+            uint64_t gpuTimestamp, [[maybe_unused]] RHI::HardwareQueueClass queueClass) const
         {
             const auto& physicalDevice = static_cast<const PhysicalDevice&>(GetPhysicalDevice());
-            auto timeInNano = AZStd::chrono::nanoseconds(static_cast<AZStd::chrono::nanoseconds::rep>(physicalDevice.GetDeviceLimits().timestampPeriod * gpuTimestamp));
+            auto timeInNano = AZStd::chrono::nanoseconds(
+                static_cast<AZStd::chrono::nanoseconds::rep>(physicalDevice.GetDeviceLimits().timestampPeriod * gpuTimestamp));
             return AZStd::chrono::duration_cast<AZStd::chrono::microseconds>(timeInNano);
         }
 
@@ -1061,7 +1114,8 @@ namespace AZ
         {
             XRDeviceDescriptor* xrDeviceDescriptor = aznew XRDeviceDescriptor;
             xrDeviceDescriptor->m_inputData.m_xrVkDevice = m_nativeDevice;
-            xrDeviceDescriptor->m_inputData.m_xrVkPhysicalDevice = static_cast<const PhysicalDevice&>(GetPhysicalDevice()).GetNativePhysicalDevice();
+            xrDeviceDescriptor->m_inputData.m_xrVkPhysicalDevice =
+                static_cast<const PhysicalDevice&>(GetPhysicalDevice()).GetNativePhysicalDevice();
             for (int i = 0; i < RHI::HardwareQueueClassCount; ++i)
             {
                 const auto& queueDescriptor =
@@ -1087,8 +1141,10 @@ namespace AZ
             m_features.m_queryTypesMask[static_cast<uint32_t>(RHI::HardwareQueueClass::Graphics)] = RHI::QueryTypeFlags::Occlusion;
             if (m_enabledDeviceFeatures.pipelineStatisticsQuery)
             {
-                m_features.m_queryTypesMask[static_cast<uint32_t>(RHI::HardwareQueueClass::Graphics)] |= RHI::QueryTypeFlags::PipelineStatistics;
-                m_features.m_queryTypesMask[static_cast<uint32_t>(RHI::HardwareQueueClass::Compute)] |= RHI::QueryTypeFlags::PipelineStatistics;
+                m_features.m_queryTypesMask[static_cast<uint32_t>(RHI::HardwareQueueClass::Graphics)] |=
+                    RHI::QueryTypeFlags::PipelineStatistics;
+                m_features.m_queryTypesMask[static_cast<uint32_t>(RHI::HardwareQueueClass::Compute)] |=
+                    RHI::QueryTypeFlags::PipelineStatistics;
             }
             if (physicalDevice.GetDeviceLimits().timestampComputeAndGraphics)
             {
@@ -1119,13 +1175,12 @@ namespace AZ
             const VkPhysicalDeviceProperties& deviceProperties = physicalDevice.GetPhysicalDeviceProperties();
             // Our sparse image implementation requires the device support sparse binding and particle residency for 2d and 3d images
             // And it should use standard block shape (64k).
-            // It also requires memory alias support so resources can use the same block repeatedly (this may reduce performance based on implementation)
-            m_features.m_tiledResource = m_enabledDeviceFeatures.sparseBinding
-                && m_enabledDeviceFeatures.sparseResidencyImage2D
-                && m_enabledDeviceFeatures.sparseResidencyImage3D
-                && m_enabledDeviceFeatures.sparseResidencyAliased
-                && deviceProperties.sparseProperties.residencyStandard2DBlockShape
-                && deviceProperties.sparseProperties.residencyStandard3DBlockShape;
+            // It also requires memory alias support so resources can use the same block repeatedly (this may reduce performance based on
+            // implementation)
+            m_features.m_tiledResource = m_enabledDeviceFeatures.sparseBinding && m_enabledDeviceFeatures.sparseResidencyImage2D &&
+                m_enabledDeviceFeatures.sparseResidencyImage3D && m_enabledDeviceFeatures.sparseResidencyAliased &&
+                deviceProperties.sparseProperties.residencyStandard2DBlockShape &&
+                deviceProperties.sparseProperties.residencyStandard3DBlockShape;
 
             // Check if the Vulkan device support subgroup operations
             m_features.m_waveOperation = physicalDevice.IsFeatureSupported(DeviceFeature::SubgroupOperation);
@@ -1133,8 +1188,10 @@ namespace AZ
             // check for the VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME in the list of physical device extensions
             // to determine if ray tracing is supported on this device
             StringList deviceExtensions = physicalDevice.GetDeviceExtensionNames();
-            StringList::iterator itRayTracingExtension = AZStd::find(deviceExtensions.begin(), deviceExtensions.end(), VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
-            m_features.m_unboundedArrays = physicalDevice.GetPhysicalDeviceDescriptorIndexingFeatures().shaderStorageTexelBufferArrayNonUniformIndexing;
+            StringList::iterator itRayTracingExtension =
+                AZStd::find(deviceExtensions.begin(), deviceExtensions.end(), VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+            m_features.m_unboundedArrays =
+                physicalDevice.GetPhysicalDeviceDescriptorIndexingFeatures().shaderStorageTexelBufferArrayNonUniformIndexing;
             if (m_features.m_unboundedArrays)
             {
                 // Ray tracing needs raytracing extensions and unbounded arrays to work
@@ -1197,6 +1254,7 @@ namespace AZ
             m_features.m_swapchainScalingFlags = AZ_TRAIT_ATOM_VULKAN_SWAPCHAIN_SCALING_FLAGS;
 
             m_features.m_signalFenceFromCPU = physicalDevice.GetPhysicalDeviceTimelineSemaphoreFeatures().timelineSemaphore;
+            // m_features.m_signalFenceFromCPU = false;
 
             const auto& deviceLimits = physicalDevice.GetDeviceLimits();
             m_limits.m_maxImageDimension1D = deviceLimits.maxImageDimension1D;
@@ -1270,42 +1328,39 @@ namespace AZ
             return bufferUsageFlags;
         }
 
-        RHI::ResultCode Device::InitVmaAllocator(RHI::PhysicalDevice & physicalDeviceBase)
+        RHI::ResultCode Device::InitVmaAllocator(RHI::PhysicalDevice& physicalDeviceBase)
         {
             auto& physicalDevice = static_cast<Vulkan::PhysicalDevice&>(physicalDeviceBase);
             const auto& physicalProperties = physicalDevice.GetPhysicalDeviceProperties();
 
             auto& context = GetContext();
             // We pass the function pointers from the Glad context since we already loaded them.
-            VmaVulkanFunctions vulkanFunctions =
-            {
-                context.GetInstanceProcAddr,
-                context.GetDeviceProcAddr,
-                context.GetPhysicalDeviceProperties,
-                context.GetPhysicalDeviceMemoryProperties,
-                context.AllocateMemory,
-                context.FreeMemory,
-                context.MapMemory,
-                context.UnmapMemory,
-                context.FlushMappedMemoryRanges,
-                context.InvalidateMappedMemoryRanges,
-                context.BindBufferMemory,
-                context.BindImageMemory,
-                context.GetBufferMemoryRequirements,
-                context.GetImageMemoryRequirements,
-                context.CreateBuffer,
-                context.DestroyBuffer,
-                context.CreateImage,
-                context.DestroyImage,
-                context.CmdCopyBuffer,
-                context.GetBufferMemoryRequirements2,
-                context.GetImageMemoryRequirements2,
-                context.BindBufferMemory2,
-                context.BindImageMemory2,
-                context.GetPhysicalDeviceMemoryProperties2,
-                context.GetDeviceBufferMemoryRequirements,
-                context.GetDeviceImageMemoryRequirements
-            };
+            VmaVulkanFunctions vulkanFunctions = { context.GetInstanceProcAddr,
+                                                   context.GetDeviceProcAddr,
+                                                   context.GetPhysicalDeviceProperties,
+                                                   context.GetPhysicalDeviceMemoryProperties,
+                                                   context.AllocateMemory,
+                                                   context.FreeMemory,
+                                                   context.MapMemory,
+                                                   context.UnmapMemory,
+                                                   context.FlushMappedMemoryRanges,
+                                                   context.InvalidateMappedMemoryRanges,
+                                                   context.BindBufferMemory,
+                                                   context.BindImageMemory,
+                                                   context.GetBufferMemoryRequirements,
+                                                   context.GetImageMemoryRequirements,
+                                                   context.CreateBuffer,
+                                                   context.DestroyBuffer,
+                                                   context.CreateImage,
+                                                   context.DestroyImage,
+                                                   context.CmdCopyBuffer,
+                                                   context.GetBufferMemoryRequirements2,
+                                                   context.GetImageMemoryRequirements2,
+                                                   context.BindBufferMemory2,
+                                                   context.BindImageMemory2,
+                                                   context.GetPhysicalDeviceMemoryProperties2,
+                                                   context.GetDeviceBufferMemoryRequirements,
+                                                   context.GetDeviceImageMemoryRequirements };
 
             auto& instance = Instance::GetInstance();
 
@@ -1510,10 +1565,10 @@ namespace AZ
             AZ_Assert(descriptor.m_sharedQueueMask != RHI::HardwareQueueClassMask::None, "Invalid shared queue mask");
             createInfo.m_queueFamilyIndices = GetCommandQueueContext().GetQueueFamilyIndices(descriptor.m_sharedQueueMask);
 
-            bool exclusiveOwnership =
-                createInfo.m_queueFamilyIndices.size() == 1; // Only supports one queue.
-                                           // If it's writable, then we assume that this will be used as an ImageAttachment and all proper
-                                           // ownership transfers will be handled by the FrameGraph.
+            bool exclusiveOwnership = createInfo.m_queueFamilyIndices.size() ==
+                1; // Only supports one queue.
+                   // If it's writable, then we assume that this will be used as an ImageAttachment and all proper
+                   // ownership transfers will be handled by the FrameGraph.
             exclusiveOwnership |= RHI::CheckBitsAny(
                 descriptor.m_bindFlags, RHI::ImageBindFlags::ShaderWrite | RHI::ImageBindFlags::Color | RHI::ImageBindFlags::DepthStencil);
             exclusiveOwnership |=
@@ -1568,5 +1623,5 @@ namespace AZ
                 AZ_Error("Vulkan", result == RHI::ResultCode::Success, "Failed to initialize Null descriptor manager");
             }
         }
-    }
-}
+    } // namespace Vulkan
+} // namespace AZ

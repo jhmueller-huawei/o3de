@@ -103,7 +103,7 @@ namespace AZ
             return SwapChain::Create();
         }
 
-        RHI::Ptr<RHI::SingleDeviceFence> SystemComponent::CreateFence()
+        RHI::Ptr<RHI::SingleDeviceFence> SystemComponent::CreateFence([[maybe_unused]] const RHI::Device& device)
         {
             return Fence::Create();
         }

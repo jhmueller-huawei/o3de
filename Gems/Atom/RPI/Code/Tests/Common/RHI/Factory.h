@@ -44,7 +44,7 @@ namespace UnitTest
 
             AZ::RHI::Ptr<AZ::RHI::SingleDeviceSwapChain> CreateSwapChain() override;
 
-            AZ::RHI::Ptr<AZ::RHI::SingleDeviceFence> CreateFence() override;
+            AZ::RHI::Ptr<AZ::RHI::SingleDeviceFence> CreateFence(const AZ::RHI::Device& device) override;
 
             AZ::RHI::Ptr<AZ::RHI::SingleDeviceBuffer> CreateBuffer() override;
 

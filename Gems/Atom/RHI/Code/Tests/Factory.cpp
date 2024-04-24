@@ -72,7 +72,7 @@ namespace UnitTest
         return nullptr;
     }
 
-    RHI::Ptr<RHI::SingleDeviceFence> Factory::CreateFence()
+    RHI::Ptr<RHI::SingleDeviceFence> Factory::CreateFence([[maybe_unused]] const RHI::Device& device)
     {
         return nullptr;
     }
