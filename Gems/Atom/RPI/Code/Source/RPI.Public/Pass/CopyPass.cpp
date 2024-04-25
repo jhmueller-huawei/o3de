@@ -436,8 +436,14 @@ namespace AZ
                             destRange.m_aspectFlags = RHI::ImageAspectFlags::Depth;
                         }
 
-                        copyImageToBuffer.m_destinationBytesPerRow = sourceImageSubResourcesLayouts[destMipSlice].m_bytesPerRow;
-                        copyImageToBuffer.m_destinationBytesPerImage = sourceImageSubResourcesLayouts[destMipSlice].m_bytesPerImage;
+                        AZStd::vector<RHI::SingleDeviceImageSubresourceLayout> destImageSubResourcesLayouts;
+                        destImageSubResourcesLayouts.resize_no_construct(destImageDescriptor.m_mipLevels);
+                        size_t destTotalSizeInBytes = 0;
+                        destImage->GetDeviceImage(m_data.m_sourceDeviceIndex)
+                            ->GetSubresourceLayouts(destRange, destImageSubResourcesLayouts.data(), &destTotalSizeInBytes);
+
+                        copyImageToBuffer.m_destinationBytesPerRow = destImageSubResourcesLayouts[destMipSlice].m_bytesPerRow;
+                        copyImageToBuffer.m_destinationBytesPerImage = destImageSubResourcesLayouts[destMipSlice].m_bytesPerImage;
                         copyImageToBuffer.m_mdDestinationBuffer = m_device1HostBuffer[m_currentBufferIndex]->GetRHIBuffer();
                         copyImageToBuffer.m_destinationFormat = FindFormatForAspect(destImageDescriptor.m_format, destImageAspect);
                     }
