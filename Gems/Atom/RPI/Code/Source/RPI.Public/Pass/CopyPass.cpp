@@ -308,7 +308,8 @@ namespace AZ
 
         void CopyPass::SetupFrameGraphDependenciesDeviceToHost(RHI::FrameGraphInterface frameGraph)
         {
-            // We need the size of the output image when copying from image to image, so we need all attachments (even the output ones)
+            // TODO maybe we can get rid of the dependency on the output
+            //  We need the size of the output image when copying from image to image, so we need all attachments (even the output ones)
             for (const PassAttachmentBinding& attachmentBinding : m_attachmentBindings)
             {
                 if (attachmentBinding.GetAttachment() != nullptr &&
@@ -420,6 +421,7 @@ namespace AZ
                             return;
                         }
 
+                        // TODO can we somehow live without the dest image descriptor here?
                         auto destImageDescriptor = destImage->GetDescriptor();
                         const uint16_t destMipSlice = m_data.m_imageSourceSubresource.m_mipSlice;
                         RHI::ImageSubresourceRange destRange(destMipSlice, destMipSlice, 0, 0);
@@ -501,8 +503,7 @@ namespace AZ
         {
             for (const PassAttachmentBinding& attachmentBinding : m_attachmentBindings)
             {
-                // We need a dependency to the input otherwise we get a deadlock
-                //    probably because the second scope is inserted before the first one
+                if (attachmentBinding.m_slotType == PassSlotType::Output) // We don't need dependencies on the input slot here
                 {
                     if (attachmentBinding.GetAttachment() != nullptr &&
                         frameGraph.GetAttachmentDatabase().IsAttachmentValid(attachmentBinding.GetAttachment()->GetAttachmentId()))
