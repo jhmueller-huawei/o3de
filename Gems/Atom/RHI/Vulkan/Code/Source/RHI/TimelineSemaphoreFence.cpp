@@ -14,7 +14,7 @@ namespace AZ
 {
     namespace Vulkan
     {
-        RHI::Ptr<FenceBase> TimelineSemaphoreFence::Create()
+        RHI::Ptr<FenceBase> TimelineSemaphoreFence::Create(Fence& fence)
         {
             return aznew TimelineSemaphoreFence();
         }

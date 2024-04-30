@@ -20,18 +20,24 @@ namespace AZ
         // Signalling from the CPU is emulated by submitting a signal command to the Graphics queue
         // The signal command must also be submitted before we can wait for the fence to be signalled
         // Used if the device does not support timeline semaphores (Vulkan version < 1.2)
-        class Fence final : public FenceBase
+        class Fence final : public RHI::Fence
         {
-            using Base = FenceBase;
+            using Base = RHI::Fence;
 
         public:
             AZ_CLASS_ALLOCATOR(Fence, AZ::ThreadPoolAllocator);
             AZ_RTTI(Fence, "{5B157619-B775-43D9-9112-B38F5B8011EC}", Base);
 
-            static RHI::Ptr<FenceBase> Create();
+            static RHI::Ptr<Fence> Create();
             ~Fence() = default;
 
-            VkFence GetNativeFence() const;
+            void SetSignalEvent(const AZStd::shared_ptr<AZ::Vulkan::SignalEvent>& signalEvent);
+            void SetSignalEventBitToSignal(int bitToSignal);
+            void SetSignalEventDependencies(AZ::Vulkan::SignalEvent::BitSet dependencies);
+
+            void SignalEvent();
+
+            FenceBase& GetFenceBase() const;
 
         private:
             Fence() = default;
@@ -51,7 +57,7 @@ namespace AZ
             RHI::FenceState GetFenceStateInternal() const override;
             //////////////////////////////////////////////////////////////////////
 
-            VkFence m_nativeFence = VK_NULL_HANDLE;
+            RHI::Ptr<FenceBase> m_fenceImpl;
         };
     } // namespace Vulkan
 } // namespace AZ

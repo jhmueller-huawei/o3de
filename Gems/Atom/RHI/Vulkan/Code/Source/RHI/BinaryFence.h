@@ -15,24 +15,27 @@ namespace AZ
     {
         class Device;
 
-        // Fence based on a timeline semaphore VkSemaphore
-        // Is used if the device supports it
-        class TimelineSemaphoreFence final : public FenceBase
+        // BinaryFence is based on VkFence
+        // Cannot natively be signalled from the CPU
+        // Signalling from the CPU is emulated by submitting a signal command to the Graphics queue
+        // The signal command must also be submitted before we can wait for the fence to be signalled
+        // Used if the device does not support timeline semaphores (Vulkan version < 1.2)
+        class BinaryFence final : public FenceBase
         {
             using Base = FenceBase;
 
         public:
-            AZ_CLASS_ALLOCATOR(TimelineSemaphoreFence, AZ::ThreadPoolAllocator);
-            AZ_RTTI(TimelineSemaphoreFence, "{B3FABCC5-24A7-43D0-868E-3C5E8FB6257A}", Base);
+            AZ_CLASS_ALLOCATOR(BinaryFence, AZ::ThreadPoolAllocator);
+            AZ_RTTI(BinaryFence, "{FE8974F0-8C64-48A7-8BF2-89E92F911AA4}", Base);
 
-            static RHI::Ptr<FenceBase> Create([[maybe_unused]] Fence& fence);
-            ~TimelineSemaphoreFence() = default;
+            static RHI::Ptr<FenceBase> Create(Fence& fence);
+            ~BinaryFence() = default;
 
-            VkSemaphore GetNativeSemaphore() const;
-            uint64_t GetPendingValue() const;
+            VkFence GetNativeFence() const;
 
         private:
-            TimelineSemaphoreFence() = default;
+            BinaryFence(Fence& fence)
+                : m_fence{ fence } {};
 
             //////////////////////////////////////////////////////////////////////////
             // RHI::Object
@@ -49,8 +52,8 @@ namespace AZ
             RHI::FenceState GetFenceStateInternal() const override;
             //////////////////////////////////////////////////////////////////////
 
-            VkSemaphore m_nativeSemaphore = VK_NULL_HANDLE;
-            uint64_t m_pendingValue = 0;
+            VkFence m_nativeFence = VK_NULL_HANDLE;
+            Fence& m_fence;
         };
     } // namespace Vulkan
 } // namespace AZ
