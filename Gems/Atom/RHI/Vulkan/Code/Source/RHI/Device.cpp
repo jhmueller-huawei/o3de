@@ -359,6 +359,11 @@ namespace AZ
                 return RHI::ResultCode::Fail;
             }
 
+            if (physicalDevice.IsOptionalDeviceExtensionSupported(OptionalDeviceExtension::CalibratedTimestamps))
+            {
+                InitializeTimeDomains();
+            }
+
             for (const VkDeviceQueueCreateInfo& queueInfo : queueCreationInfo)
             {
                 delete[] queueInfo.pQueuePriorities;
@@ -960,6 +965,53 @@ namespace AZ
             const auto& physicalDevice = static_cast<const PhysicalDevice&>(GetPhysicalDevice());
             auto timeInNano = AZStd::chrono::nanoseconds(static_cast<AZStd::chrono::nanoseconds::rep>(physicalDevice.GetDeviceLimits().timestampPeriod * gpuTimestamp));
             return AZStd::chrono::duration_cast<AZStd::chrono::microseconds>(timeInNano);
+        }
+
+        AZStd::pair<uint64_t, uint64_t> Device::GetCalibratedTimestamp()
+        {
+            GetContext().GetCalibratedTimestampsEXT(
+                m_nativeDevice,
+                static_cast<uint32_t>(m_timestampsInfo.size()),
+                m_timestampsInfo.data(),
+                m_timestamps.data(),
+                m_maxDeviations.data());
+            return { m_timestamps[m_deviceTimeDomainIndex], m_timestamps[m_hostTimeDomainIndex] };
+        }
+
+        void Device::InitializeTimeDomains()
+        {
+            auto timeDomains{
+                static_cast<const PhysicalDevice&>(GetPhysicalDevice()).GetCalibratedTimeDomains(m_loaderContext->GetContext())
+            };
+
+            if (!timeDomains.empty())
+            {
+                auto domainIndex{ 0 };
+                for (VkTimeDomainEXT timeDomain : timeDomains)
+                {
+                    VkCalibratedTimestampInfoEXT timestamp_info{};
+
+                    // Configure timestamp info variable
+                    timestamp_info.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_EXT;
+                    timestamp_info.pNext = nullptr;
+                    timestamp_info.timeDomain = timeDomain;
+
+                    if (timeDomain == VK_TIME_DOMAIN_DEVICE_EXT)
+                    {
+                        m_deviceTimeDomainIndex = domainIndex;
+                    }
+                    else
+                    {
+                        m_hostTimeDomainIndex = domainIndex;
+                    }
+
+                    m_timestampsInfo.push_back(timestamp_info);
+                    domainIndex++;
+                }
+
+                m_timestamps.resize(timeDomains.size());
+                m_maxDeviations.resize(timeDomains.size());
+            }
         }
 
         RHI::ResourceMemoryRequirements Device::GetResourceMemoryRequirements(const RHI::ImageDescriptor& descriptor)

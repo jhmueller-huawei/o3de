@@ -370,6 +370,11 @@ namespace AZ
             return AZStd::chrono::duration_cast<AZStd::chrono::microseconds>(durationInSeconds);
         }
 
+        AZStd::pair<uint64_t, uint64_t> Device::GetCalibratedTimestamp()
+        {
+            return m_commandQueueContext.GetCommandQueue(RHI::HardwareQueueClass::Graphics).GetClockCalibration();
+        }
+
         void Device::FillFormatsCapabilitiesInternal(FormatCapabilitiesList& formatsCapabilities)
         {
             for (uint32_t i = 0; i < formatsCapabilities.size(); ++i)

@@ -199,6 +199,7 @@ namespace AZ
             void UpdateCpuTimingStatisticsInternal() const override;
             AZStd::vector<RHI::Format> GetValidSwapChainImageFormats(const RHI::WindowHandle& windowHandle) const override;
             AZStd::chrono::microseconds GpuTimestampToMicroseconds(uint64_t gpuTimestamp, RHI::HardwareQueueClass queueClass) const override;
+            AZStd::pair<uint64_t, uint64_t> GetCalibratedTimestamp() override;
             void FillFormatsCapabilitiesInternal(FormatCapabilitiesList& formatsCapabilities) override;
             RHI::ResultCode InitializeLimits() override;
             void PreShutdown() override;
@@ -275,6 +276,15 @@ namespace AZ
 
             BindlessDescriptorPool m_bindlessDescriptorPool;
             ShadingRateImageMode m_imageShadingRateMode = ShadingRateImageMode::None;
+
+            //! Calibrated Timestamps
+            void InitializeTimeDomains();
+
+            AZStd::vector<VkCalibratedTimestampInfoEXT> m_timestampsInfo{};
+            int m_deviceTimeDomainIndex{};
+            int m_hostTimeDomainIndex{};
+            AZStd::vector<uint64_t> m_timestamps{}; // timestamps vector
+            AZStd::vector<uint64_t> m_maxDeviations{};
         };
 
         template<typename ObjectType, typename ...Args>

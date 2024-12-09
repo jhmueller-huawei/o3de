@@ -588,6 +588,8 @@ namespace AZ
                 return;
             }
 
+            auto* rhiSystem = AZ::RHI::RHISystemInterface::Get();
+
             // Clear the references from the previous frame.
             m_passEntryReferences.clear();
 
@@ -639,6 +641,11 @@ namespace AZ
 
             for (auto& [deviceIndex, passEntries] : passEntriesMap)
             {
+                auto calibratedTimestamp{ rhiSystem->GetDevice(deviceIndex)->GetCalibratedTimestamp() };
+                AZ_Printf("IGGP", "Timestamp: %llu %llu", calibratedTimestamp.first, calibratedTimestamp.second);
+                calibratedTimestamp = rhiSystem->GetDevice(deviceIndex)->GetCalibratedTimestamp();
+                AZ_Printf("IGGP", "Timestamp: %llu %llu", calibratedTimestamp.first, calibratedTimestamp.second);
+
                 // Sort the pass entries based on their starting time and duration
                 AZStd::sort(
                     passEntries.sortedPassEntries.begin(),
