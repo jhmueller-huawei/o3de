@@ -969,13 +969,23 @@ namespace AZ
 
         AZStd::pair<uint64_t, uint64_t> Device::GetCalibratedTimestamp()
         {
+            if (!static_cast<const PhysicalDevice&>(GetPhysicalDevice())
+                     .IsOptionalDeviceExtensionSupported(OptionalDeviceExtension::CalibratedTimestamps))
+            {
+                return { 0ull, AZStd::chrono::microseconds().count() };
+            }
+
+            uint64_t maxDeviation;
+            AZStd::pair<uint64_t, uint64_t> result;
+
+            AZStd::array<VkCalibratedTimestampInfoEXT, 2> timestampsInfos{
+                VkCalibratedTimestampInfoEXT{ VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_EXT, 0, VK_TIME_DOMAIN_DEVICE_EXT },
+                VkCalibratedTimestampInfoEXT{ VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_EXT, 0, m_hostTimeDomain }
+            };
+
             GetContext().GetCalibratedTimestampsEXT(
-                m_nativeDevice,
-                static_cast<uint32_t>(m_timestampsInfo.size()),
-                m_timestampsInfo.data(),
-                m_timestamps.data(),
-                m_maxDeviations.data());
-            return { m_timestamps[m_deviceTimeDomainIndex], m_timestamps[m_hostTimeDomainIndex] };
+                m_nativeDevice, static_cast<uint32_t>(timestampsInfos.size()), timestampsInfos.data(), &result.first, &maxDeviation);
+            return result;
         }
 
         void Device::InitializeTimeDomains()
@@ -984,33 +994,25 @@ namespace AZ
                 static_cast<const PhysicalDevice&>(GetPhysicalDevice()).GetCalibratedTimeDomains(m_loaderContext->GetContext())
             };
 
-            if (!timeDomains.empty())
+            bool deviceTimeDomainFound{ false };
+
+            for (VkTimeDomainEXT timeDomain : timeDomains)
             {
-                auto domainIndex{ 0 };
-                for (VkTimeDomainEXT timeDomain : timeDomains)
+                if (timeDomain == VK_TIME_DOMAIN_DEVICE_EXT)
                 {
-                    VkCalibratedTimestampInfoEXT timestamp_info{};
-
-                    // Configure timestamp info variable
-                    timestamp_info.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_EXT;
-                    timestamp_info.pNext = nullptr;
-                    timestamp_info.timeDomain = timeDomain;
-
-                    if (timeDomain == VK_TIME_DOMAIN_DEVICE_EXT)
-                    {
-                        m_deviceTimeDomainIndex = domainIndex;
-                    }
-                    else
-                    {
-                        m_hostTimeDomainIndex = domainIndex;
-                    }
-
-                    m_timestampsInfo.push_back(timestamp_info);
-                    domainIndex++;
+                    deviceTimeDomainFound = true;
                 }
+                // we prioritize VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT of the host time domains
+                else if (m_hostTimeDomain != VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT)
+                {
+                    m_hostTimeDomain = timeDomain;
+                }
+            }
 
-                m_timestamps.resize(timeDomains.size());
-                m_maxDeviations.resize(timeDomains.size());
+            // if there is no device time domain we reset the host one as this is pointless then
+            if (!deviceTimeDomainFound)
+            {
+                m_hostTimeDomain = VK_TIME_DOMAIN_MAX_ENUM_EXT;
             }
         }
 

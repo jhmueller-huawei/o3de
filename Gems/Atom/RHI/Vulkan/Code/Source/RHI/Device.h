@@ -231,6 +231,9 @@ namespace AZ
             VkImageUsageFlags CalculateImageUsageFlags(const RHI::ImageDescriptor& descriptor) const;
             VkImageCreateFlags CalculateImageCreateFlags(const RHI::ImageDescriptor& descriptor) const;
 
+            //! Calibrated Timestamps
+            void InitializeTimeDomains();
+
             VkDevice m_nativeDevice = VK_NULL_HANDLE;
             VmaAllocator m_vmaAllocator = VK_NULL_HANDLE;
             VkPhysicalDeviceFeatures m_enabledDeviceFeatures{};
@@ -277,14 +280,7 @@ namespace AZ
             BindlessDescriptorPool m_bindlessDescriptorPool;
             ShadingRateImageMode m_imageShadingRateMode = ShadingRateImageMode::None;
 
-            //! Calibrated Timestamps
-            void InitializeTimeDomains();
-
-            AZStd::vector<VkCalibratedTimestampInfoEXT> m_timestampsInfo{};
-            int m_deviceTimeDomainIndex{};
-            int m_hostTimeDomainIndex{};
-            AZStd::vector<uint64_t> m_timestamps{}; // timestamps vector
-            AZStd::vector<uint64_t> m_maxDeviations{};
+            VkTimeDomainEXT m_hostTimeDomain = VK_TIME_DOMAIN_MAX_ENUM_EXT;
         };
 
         template<typename ObjectType, typename ...Args>

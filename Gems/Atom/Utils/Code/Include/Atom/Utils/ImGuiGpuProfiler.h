@@ -260,6 +260,7 @@ namespace AZ
             RefreshType m_refreshType = RefreshType::Realtime;
             AZStd::sys_time_t m_lastUpdateTimeMicroSecond = 0;
 
+            AZStd::unordered_map<int, AZStd::pair<uint64_t, uint64_t>> m_lastCalibratedTimestamps;
         };
 
         class ImGuiGpuMemoryView

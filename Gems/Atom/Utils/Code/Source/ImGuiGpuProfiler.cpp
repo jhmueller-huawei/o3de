@@ -599,6 +599,9 @@ namespace AZ
                 AZStd::vector<PassEntry*> sortedPassEntries;
                 AZStd::vector<AZStd::vector<PassEntry*>> sortedPassGrid;
                 RPI::TimestampResult gpuTimestamp;
+                uint64_t deviceReferenceDuration;
+                uint64_t hostReferenceDuration;
+                // int64_t timestamp_host_device_offset;
             };
 
             AZStd::map<int, PerDevicePassData> passEntriesMap;
@@ -639,12 +642,28 @@ namespace AZ
                 }
             }
 
+            int64_t minimumHostTime{ INT64_MAX };
+            int64_t maximumHostTime{ INT64_MIN };
+
+            decltype(m_lastCalibratedTimestamps) calibratedTimestamps;
+
             for (auto& [deviceIndex, passEntries] : passEntriesMap)
             {
-                auto calibratedTimestamp{ rhiSystem->GetDevice(deviceIndex)->GetCalibratedTimestamp() };
-                AZ_Printf("IGGP", "Timestamp: %llu %llu", calibratedTimestamp.first, calibratedTimestamp.second);
-                calibratedTimestamp = rhiSystem->GetDevice(deviceIndex)->GetCalibratedTimestamp();
-                AZ_Printf("IGGP", "Timestamp: %llu %llu", calibratedTimestamp.first, calibratedTimestamp.second);
+                calibratedTimestamps[deviceIndex] = rhiSystem->GetDevice(deviceIndex)->GetCalibratedTimestamp();
+
+                if (m_lastCalibratedTimestamps.find(deviceIndex) == m_lastCalibratedTimestamps.end())
+                {
+                    m_lastCalibratedTimestamps[deviceIndex] = { 0, 0 };
+                }
+
+                auto& calibratedTimestamp = calibratedTimestamps[deviceIndex];
+                auto& lastCalibratedTimestamp = m_lastCalibratedTimestamps[deviceIndex];
+
+                passEntries.deviceReferenceDuration = calibratedTimestamp.first - lastCalibratedTimestamp.first;
+                passEntries.hostReferenceDuration = calibratedTimestamp.second - lastCalibratedTimestamp.second;
+
+                // passEntries.timestamp_host_device_offset = static_cast<int64_t>(calibratedTimestamp.second) - calibratedTimestamp.first;
+                AZ_Printf("IGGP", "Timestamp: %llu %llu\n", calibratedTimestamp.first, calibratedTimestamp.second);
 
                 // Sort the pass entries based on their starting time and duration
                 AZStd::sort(
@@ -661,11 +680,51 @@ namespace AZ
                             passEntry2->m_timestampResult.GetTimestampBeginInTicks();
                     });
 
+                uint64_t lastTimestamp{ 0 };
+                PassEntry* lastPassEntry{ nullptr };
+
+                // find the maximum length, since the pass that starts last could end earlier than another pass, so the sorting doesn't help
+                for (const auto& passEntry : passEntries.sortedPassEntries)
+                {
+                    uint64_t endTimestamp{ passEntry->m_timestampResult.GetTimestampBeginInTicks() +
+                                           passEntry->m_timestampResult.GetDurationInTicks() };
+
+                    if (endTimestamp > lastTimestamp)
+                    {
+                        lastPassEntry = passEntry;
+                        lastTimestamp = endTimestamp;
+                    }
+                }
+
                 // calculate the total GPU duration.
                 if (passEntries.sortedPassEntries.size() > 0)
                 {
                     passEntries.gpuTimestamp = passEntries.sortedPassEntries.front()->m_timestampResult;
-                    passEntries.gpuTimestamp.Add(passEntries.sortedPassEntries.back()->m_timestampResult);
+                    passEntries.gpuTimestamp.Add(lastPassEntry->m_timestampResult);
+                }
+
+                // TODO: mixing ticks from timestamps and nanoseconds (or whatever) from calibrated timestamps
+                /*uint64_t hostStartTime{ passEntries.gpuTimestamp.GetTimestampBeginInTicks() + passEntries.timestamp_host_device_offset };
+                uint64_t hostEndTime{ lastTimestamp + passEntries.timestamp_host_device_offset };*/
+
+                int64_t hostStartTime{ ((int64_t(passEntries.gpuTimestamp.GetTimestampBeginInTicks()) -
+                                         int64_t(lastCalibratedTimestamp.first)) *
+                                        int64_t(passEntries.hostReferenceDuration)) /
+                                           int64_t(passEntries.deviceReferenceDuration) +
+                                       int64_t(lastCalibratedTimestamp.second) };
+                int64_t hostEndTime{ ((int64_t(lastTimestamp) - int64_t(lastCalibratedTimestamp.first)) *
+                                      int64_t(passEntries.hostReferenceDuration)) /
+                                         int64_t(passEntries.deviceReferenceDuration) +
+                                     int64_t(lastCalibratedTimestamp.second) };
+
+                if (hostStartTime < minimumHostTime)
+                {
+                    minimumHostTime = hostStartTime;
+                }
+
+                if (hostEndTime > maximumHostTime)
+                {
+                    maximumHostTime = hostEndTime;
                 }
 
                 // Add a pass to the pass grid which none of the pass's timestamp range won't overlap each other.
@@ -693,6 +752,8 @@ namespace AZ
                     }
                 }
             }
+
+            auto hostDuration{ maximumHostTime - minimumHostTime };
 
             // Refresh timestamp query
             bool needEnable = false;
@@ -786,6 +847,8 @@ namespace AZ
                         const float passBarSpace = 3.f;
                         float areaWidth = ImGui::GetContentRegionAvail().x - 20.f;
 
+                        auto& lastCalibratedTimestamp = m_lastCalibratedTimestamps[deviceIndex];
+
                         ImGui::Text("GPU %d", deviceIndex);
                         AZStd::string childID{ "Timeline" + AZStd::to_string(deviceIndex) };
                         if (ImGui::BeginChild(
@@ -794,10 +857,26 @@ namespace AZ
                                 false))
                         {
                             // start tick and end tick for the area
+                            //*
+
+                            int64_t diff = int64_t(minimumHostTime) - int64_t(lastCalibratedTimestamp.second);
+                            int64_t devoffset = lastCalibratedTimestamp.first;
+
+                            int64_t areaStartTick =
+                                ((diff)*int64_t(passEntries.deviceReferenceDuration)) / int64_t(passEntries.hostReferenceDuration) +
+                                devoffset;
+                            int64_t areaDurationInTicks =
+                                (hostDuration * int64_t(passEntries.deviceReferenceDuration)) / int64_t(passEntries.hostReferenceDuration);
+
+                            // uint64_t areaStartTick = minimumHostTime - passEntries.timestamp_host_device_offset;
+                            // uint64_t areaEndTick = maximumHostTime - passEntries.timestamp_host_device_offset;
+                            // uint64_t areaDurationInTicks = hostDuration;
+                            /*/
                             uint64_t areaStartTick = passEntries.sortedPassEntries.front()->m_timestampResult.GetTimestampBeginInTicks();
                             uint64_t areaEndTick = passEntries.sortedPassEntries.back()->m_timestampResult.GetTimestampBeginInTicks() +
                                 passEntries.sortedPassEntries.back()->m_timestampResult.GetDurationInTicks();
                             uint64_t areaDurationInTicks = areaEndTick - areaStartTick;
+                            //*/
 
                             float rowStartY = 0.f;
                             for (auto& row : passEntries.sortedPassGrid)
@@ -838,6 +917,8 @@ namespace AZ
                         ImGui::Separator();
                     }
                 }
+
+                m_lastCalibratedTimestamps = calibratedTimestamps;
 
                 // Draw the timestamp view.
                 {
